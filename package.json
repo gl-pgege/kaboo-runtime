@@ -1,0 +1,61 @@
+{
+  "name": "kaboo-runtime",
+  "version": "0.1.0",
+  "description": "A persistence plugin for the CopilotKit runtime: a custom AgentRunner + pluggable ThreadStore that persists the full AG-UI event log and replays it on reload. Framework-agnostic, no HTTP layer.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kaboo/kaboo-workflows.git",
+    "directory": "kaboo-runtime"
+  },
+  "homepage": "https://github.com/kaboo/kaboo-workflows/tree/main/kaboo-runtime#readme",
+  "keywords": [
+    "copilotkit",
+    "ag-ui",
+    "agents",
+    "kaboo",
+    "persistence",
+    "runtime"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@ag-ui/client": ">=0.0.57",
+    "@copilotkit/runtime": ">=1.62.0",
+    "pg": ">=8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "pg": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@ag-ui/client": "^0.0.57",
+    "@copilotkit/runtime": "^1.62.2",
+    "@types/node": "^22.20.1",
+    "@types/pg": "^8.20.0",
+    "pg": "^8.13.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3",
+    "vitest": "^2"
+  }
+}
