@@ -48,4 +48,4 @@ app.listen(port, () => {
 - [Thread stores](thread-stores.md) — in-memory vs Postgres, schema, `dsn` vs `pool`.
 - [Custom store](custom-store.md) — implement `ThreadStore` yourself.
 - [Replay & state](replay-and-state.md) — the event log, `deriveState`, history injection.
-- [API reference](api/) — auto-generated from the source.
+- [API reference](api/README.md) — auto-generated from the source.

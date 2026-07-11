@@ -4,6 +4,7 @@
   "plugin": ["typedoc-plugin-markdown"],
   "out": "docs/api",
   "readme": "none",
+  "gitRevision": "main",
   "githubPages": false,
   "hideBreadcrumbs": true,
   "excludeInternal": true,

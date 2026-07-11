@@ -6,7 +6,7 @@
 
 > **deriveState**(`events`): `Record`\<`string`, `unknown`\> \| `null`
 
-Defined in: [src/state.ts:22](https://github.com/gl-pgege/kaboo-runtime/blob/2fe2db9351f526ac0d1f3c15be4de8aca6139964/src/state.ts#L22)
+Defined in: [src/state.ts:22](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/state.ts#L22)
 
 Derive the latest agent state from an event log by scanning backwards for the
 last `STATE_SNAPSHOT`. Returns `null` when the thread never emitted one.
