@@ -1,4 +1,4 @@
-[**@kaboo/runtime**](../README.md)
+[**@pgege/kaboo-runtime**](../README.md)
 
 ***
 
@@ -14,7 +14,7 @@ install it in the host app to use this store.
 ## Example
 
 ```ts
-import { createKabooRunner, PostgresThreadStore } from "@kaboo/runtime";
+import { createKabooRunner, PostgresThreadStore } from "@pgege/kaboo-runtime";
 
 const store = new PostgresThreadStore({ dsn: process.env.DATABASE_URL });
 const runner = createKabooRunner(store);

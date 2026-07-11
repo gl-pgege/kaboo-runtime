@@ -95,7 +95,7 @@ writeFileSync(
         types: ["node"],
         baseUrl: ".",
         paths: {
-          "@kaboo/runtime": ["../dist/index.d.ts"],
+          "@pgege/kaboo-runtime": ["../dist/index.d.ts"],
         },
       },
       include: ["**/*.ts"],

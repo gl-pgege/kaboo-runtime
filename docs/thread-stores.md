@@ -27,7 +27,7 @@ Keeps everything in a `Map` for the life of the process. Ideal for local
 development, tests, and the demo. Data is lost on restart.
 
 ```ts
-import { createKabooRunner, InMemoryThreadStore } from "@kaboo/runtime";
+import { createKabooRunner, InMemoryThreadStore } from "@pgege/kaboo-runtime";
 
 const runner = createKabooRunner(new InMemoryThreadStore());
 ```
@@ -39,7 +39,7 @@ application schema). `pg` is an optional peer dependency — install it to use t
 store.
 
 ```ts
-import { createKabooRunner, PostgresThreadStore } from "@kaboo/runtime";
+import { createKabooRunner, PostgresThreadStore } from "@pgege/kaboo-runtime";
 
 const runner = createKabooRunner(
   new PostgresThreadStore({ dsn: process.env.DATABASE_URL }),
@@ -78,7 +78,7 @@ To share an existing pool (e.g. your app already has one), pass `pool` instead:
 
 ```ts
 import { Pool } from "pg";
-import { PostgresThreadStore } from "@kaboo/runtime";
+import { PostgresThreadStore } from "@pgege/kaboo-runtime";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const store = new PostgresThreadStore({ pool });

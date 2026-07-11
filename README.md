@@ -6,8 +6,8 @@
 
 [![npm version](https://img.shields.io/npm/v/kaboo-runtime.svg)](https://www.npmjs.com/package/kaboo-runtime)
 [![license](https://img.shields.io/npm/l/kaboo-runtime.svg)](./LICENSE)
-[![docs](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://gl-pgege.github.io/@kaboo/runtime/)
-[![CI](https://github.com/gl-pgege/@kaboo/runtime/actions/workflows/ci.yml/badge.svg)](https://github.com/gl-pgege/@kaboo/runtime/actions/workflows/ci.yml)
+[![docs](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://gl-pgege.github.io/@pgege/kaboo-runtime/)
+[![CI](https://github.com/gl-pgege/@pgege/kaboo-runtime/actions/workflows/ci.yml/badge.svg)](https://github.com/gl-pgege/@pgege/kaboo-runtime/actions/workflows/ci.yml)
 
 kaboo-runtime makes the server the custodian of conversation history. It drops a
 custom `AgentRunner` into your CopilotKit runtime that records **every** AG-UI
@@ -33,7 +33,7 @@ already mount CopilotKit with.
 ## Install
 
 ```bash
-yarn add @kaboo/runtime
+yarn add @pgege/kaboo-runtime
 ```
 
 Peer dependencies: `@ag-ui/client`, `@copilotkit/runtime`, and `rxjs`. `pg` is an
@@ -50,7 +50,7 @@ plain Express):
 import express from "express";
 import { CopilotRuntime } from "@copilotkit/runtime/v2";
 import { createCopilotExpressHandler } from "@copilotkit/runtime/v2/express";
-import { createKabooRunner, InMemoryThreadStore } from "@kaboo/runtime";
+import { createKabooRunner, InMemoryThreadStore } from "@pgege/kaboo-runtime";
 
 const runtime = new CopilotRuntime({
   agents: {},
@@ -95,7 +95,7 @@ across restarts — the store auto-creates its own tables on first use.
 ## API reference
 
 Full, auto-generated API docs live on the
-[documentation site](https://gl-pgege.github.io/@kaboo/runtime/api/). A flat index
+[documentation site](https://gl-pgege.github.io/@pgege/kaboo-runtime/api/). A flat index
 of every public export is in [docs/api-inventory.md](./docs/api-inventory.md).
 
 ## Examples

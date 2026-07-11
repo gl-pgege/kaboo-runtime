@@ -2,7 +2,7 @@
 import express from "express";
 import { CopilotRuntime } from "@copilotkit/runtime/v2";
 import { createCopilotExpressHandler } from "@copilotkit/runtime/v2/express";
-import { createKabooRunner, PostgresThreadStore } from "@kaboo/runtime";
+import { createKabooRunner, PostgresThreadStore } from "@pgege/kaboo-runtime";
 
 const dsn = process.env.DATABASE_URL;
 if (!dsn) throw new Error("Set DATABASE_URL to a Postgres connection string.");

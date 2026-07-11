@@ -1,8 +1,8 @@
-**@kaboo/runtime**
+**@pgege/kaboo-runtime**
 
 ***
 
-# @kaboo/runtime
+# @pgege/kaboo-runtime
 
 ## Classes
 

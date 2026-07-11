@@ -9,7 +9,7 @@ the whole integration:
 import express from "express";
 import { CopilotRuntime } from "@copilotkit/runtime/v2";
 import { createCopilotExpressHandler } from "@copilotkit/runtime/v2/express";
-import { createKabooRunner, InMemoryThreadStore } from "@kaboo/runtime";
+import { createKabooRunner, InMemoryThreadStore } from "@pgege/kaboo-runtime";
 
 const runtime = new CopilotRuntime({
   agents: {},
@@ -27,6 +27,6 @@ app.listen(port, () => {
 ```
 
 For durable persistence, swap in `new PostgresThreadStore({ dsn })` — see
-[`examples/express-postgres`](https://github.com/gl-pgege/@kaboo/runtime/tree/main/examples/express-postgres).
+[`examples/express-postgres`](https://github.com/gl-pgege/@pgege/kaboo-runtime/tree/main/examples/express-postgres).
 Add your real agents to the `agents` map (e.g. an `HttpAgent` pointing at a
 kaboo-workflows pipeline).

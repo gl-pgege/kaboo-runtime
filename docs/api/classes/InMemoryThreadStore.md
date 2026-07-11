@@ -1,4 +1,4 @@
-[**@kaboo/runtime**](../README.md)
+[**@pgege/kaboo-runtime**](../README.md)
 
 ***
 
@@ -13,7 +13,7 @@ custom store) for durable persistence.
 ## Example
 
 ```ts
-import { createKabooRunner, InMemoryThreadStore } from "@kaboo/runtime";
+import { createKabooRunner, InMemoryThreadStore } from "@pgege/kaboo-runtime";
 
 const runner = createKabooRunner(new InMemoryThreadStore());
 ```

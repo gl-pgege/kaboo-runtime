@@ -1,4 +1,4 @@
-[**@kaboo/runtime**](../README.md)
+[**@pgege/kaboo-runtime**](../README.md)
 
 ***
 
@@ -31,7 +31,7 @@ The last snapshot object, or `null` when there is none.
 ## Example
 
 ```ts
-import { deriveState } from "@kaboo/runtime";
+import { deriveState } from "@pgege/kaboo-runtime";
 import type { BaseEvent } from "@ag-ui/client";
 
 declare const events: BaseEvent[];

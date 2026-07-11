@@ -12,7 +12,7 @@ import { EventType, type BaseEvent } from "@ag-ui/client";
  *
  * @example
  * ```ts
- * import { deriveState } from "@kaboo/runtime";
+ * import { deriveState } from "@pgege/kaboo-runtime";
  * import type { BaseEvent } from "@ag-ui/client";
  *
  * declare const events: BaseEvent[];

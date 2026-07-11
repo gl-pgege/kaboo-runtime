@@ -8,7 +8,7 @@
     "start": "tsx src/server.ts"
   },
   "dependencies": {
-    "@kaboo/runtime": "file:../..",
+    "@pgege/kaboo-runtime": "file:../..",
     "@ag-ui/client": ">=0.0.57",
     "@copilotkit/runtime": ">=1.62.0",
     "express": ">=5.0.0",

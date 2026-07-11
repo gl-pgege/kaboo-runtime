@@ -1,7 +1,7 @@
 import express from "express";
 import { CopilotRuntime } from "@copilotkit/runtime/v2";
 import { createCopilotExpressHandler } from "@copilotkit/runtime/v2/express";
-import { createKabooRunner } from "@kaboo/runtime";
+import { createKabooRunner } from "@pgege/kaboo-runtime";
 import { JsonFileThreadStore } from "./store";
 
 const runtime = new CopilotRuntime({

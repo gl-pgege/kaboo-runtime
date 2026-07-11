@@ -15,11 +15,11 @@
 ## Install
 
 ```bash
-yarn add @kaboo/runtime
+yarn add @pgege/kaboo-runtime
 # or
-npm install @kaboo/runtime
+npm install @pgege/kaboo-runtime
 # or
-pnpm add @kaboo/runtime
+pnpm add @pgege/kaboo-runtime
 ```
 
 ## Wire the runner
@@ -28,7 +28,7 @@ Create a runner bound to a store and pass it to `CopilotRuntime`:
 
 ```ts
 import { CopilotRuntime } from "@copilotkit/runtime/v2";
-import { createKabooRunner, InMemoryThreadStore } from "@kaboo/runtime";
+import { createKabooRunner, InMemoryThreadStore } from "@pgege/kaboo-runtime";
 
 const runtime = new CopilotRuntime({
   agents: {},
@@ -49,7 +49,7 @@ by [kaboo-workflows](https://gl-pgege.github.io/kaboo-workflows/)
 ```ts
 import { CopilotRuntime } from "@copilotkit/runtime/v2";
 import { HttpAgent } from "@ag-ui/client";
-import { createKabooRunner, InMemoryThreadStore } from "@kaboo/runtime";
+import { createKabooRunner, InMemoryThreadStore } from "@pgege/kaboo-runtime";
 
 const runtime = new CopilotRuntime({
   agents: {
@@ -69,7 +69,7 @@ Swap the store for a durable one — everything else stays the same. The store
 creates its own tables on first use:
 
 ```ts
-import { createKabooRunner, PostgresThreadStore } from "@kaboo/runtime";
+import { createKabooRunner, PostgresThreadStore } from "@pgege/kaboo-runtime";
 
 const runner = createKabooRunner(
   new PostgresThreadStore({ dsn: process.env.DATABASE_URL }),
@@ -90,7 +90,7 @@ Persistence failures never crash a run — they are reported through `onStoreErr
 (defaulting to `console.error`):
 
 ```ts
-import { createKabooRunner, InMemoryThreadStore } from "@kaboo/runtime";
+import { createKabooRunner, InMemoryThreadStore } from "@pgege/kaboo-runtime";
 
 const runner = createKabooRunner(new InMemoryThreadStore(), {
   onStoreError: (error, ctx) => {

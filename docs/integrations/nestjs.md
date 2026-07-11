@@ -18,7 +18,7 @@ import {
   InMemoryThreadStore,
   PostgresThreadStore,
   type ThreadStore,
-} from "@kaboo/runtime";
+} from "@pgege/kaboo-runtime";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);

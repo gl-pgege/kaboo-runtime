@@ -17,7 +17,7 @@ interface MemoryRecord {
  *
  * @example
  * ```ts
- * import { createKabooRunner, InMemoryThreadStore } from "@kaboo/runtime";
+ * import { createKabooRunner, InMemoryThreadStore } from "@pgege/kaboo-runtime";
  *
  * const runner = createKabooRunner(new InMemoryThreadStore());
  * ```
