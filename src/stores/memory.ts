@@ -14,6 +14,13 @@ interface MemoryRecord {
  * In-memory {@link ThreadStore}. Data lives for the life of the process — ideal
  * for local development, tests, and the demo. Use `PostgresThreadStore` (or a
  * custom store) for durable persistence.
+ *
+ * @example
+ * ```ts
+ * import { createKabooRunner, InMemoryThreadStore } from "kaboo-runtime";
+ *
+ * const runner = createKabooRunner(new InMemoryThreadStore());
+ * ```
  */
 export class InMemoryThreadStore implements ThreadStore {
   private readonly threads = new Map<string, MemoryRecord>();

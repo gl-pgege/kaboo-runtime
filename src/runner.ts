@@ -12,6 +12,7 @@ import type { AbstractAgent, BaseEvent, Message, RunAgentInput } from "@ag-ui/cl
 import type { ThreadStore } from "./store";
 import { deriveState } from "./state";
 
+/** Options for {@link KabooAgentRunner} / {@link createKabooRunner}. */
 export interface KabooRunnerOptions {
   /** Called when a store write fails, so hosts can log/observe. */
   onStoreError?: (error: unknown, context: { threadId: string; op: string }) => void;
@@ -41,12 +42,28 @@ interface ThreadRuntime {
  * store rather than the browser. Unlike the stock in-memory runner, events are
  * NOT compacted, so `ACTIVITY_SNAPSHOT` / `CUSTOM` events survive for a full UI
  * replay.
+ *
+ * @example
+ * ```ts
+ * import { CopilotRuntime } from "@copilotkit/runtime/v2";
+ * import { KabooAgentRunner, InMemoryThreadStore } from "kaboo-runtime";
+ *
+ * const runtime = new CopilotRuntime({
+ *   agents: {},
+ *   runner: new KabooAgentRunner(new InMemoryThreadStore()),
+ * });
+ * ```
  */
 export class KabooAgentRunner extends AgentRunner {
+  /** @internal Framework marker telling CopilotKit this runner serves local thread endpoints. */
   readonly ɵsupportsLocalThreadEndpoints = true;
 
   private readonly cache = new Map<string, ThreadRuntime>();
 
+  /**
+   * @param store - Where to persist and read each thread's event log.
+   * @param options - Optional hooks (e.g. {@link KabooRunnerOptions.onStoreError}).
+   */
   constructor(
     private readonly store: ThreadStore,
     private readonly options: KabooRunnerOptions = {},
@@ -109,6 +126,15 @@ export class KabooAgentRunner extends AgentRunner {
     else console.error(`[kaboo-runtime] store ${op} failed for thread ${threadId}:`, error);
   }
 
+  /**
+   * Run an agent for a thread, streaming its AG-UI events. The thread's
+   * persisted state is injected into `input.state` first; on completion the run's
+   * events and derived messages are persisted to the store. Throws if the thread
+   * is already running.
+   *
+   * @param request - The CopilotKit run request (`threadId`, `agent`, `input`).
+   * @returns An observable of the run's events (also mirrored to `connect`).
+   */
   run(request: AgentRunnerRunRequest): Observable<BaseEvent> {
     const { threadId, agent, input } = request;
     const record = this.getOrCreate(threadId, agent.agentId ?? "default");
@@ -180,6 +206,14 @@ export class KabooAgentRunner extends AgentRunner {
     return runSubject.asObservable();
   }
 
+  /**
+   * Replay a thread's stored event log, then tee any in-flight run so a
+   * reconnecting client sees prior turns followed by live events. Completes
+   * immediately (after replay) when nothing is running.
+   *
+   * @param request - The connect request (`threadId`).
+   * @returns An observable that emits the stored log and, if running, live events.
+   */
   connect(request: AgentRunnerConnectRequest): Observable<BaseEvent> {
     const { threadId } = request;
     const subject = new ReplaySubject<BaseEvent>(Infinity);
@@ -210,10 +244,23 @@ export class KabooAgentRunner extends AgentRunner {
     return subject.asObservable();
   }
 
+  /**
+   * Report whether a thread currently has a run in flight.
+   *
+   * @param request - The is-running request (`threadId`).
+   * @returns `true` while a run is active, otherwise `false`.
+   */
   isRunning(request: AgentRunnerIsRunningRequest): Promise<boolean> {
     return Promise.resolve(this.cache.get(request.threadId)?.running ?? false);
   }
 
+  /**
+   * Request cancellation of a thread's in-flight run by aborting its agent.
+   *
+   * @param request - The stop request (`threadId`).
+   * @returns `true` if a stop was initiated; `false` when nothing is running, a
+   * stop was already requested, or the abort threw.
+   */
   stop(request: AgentRunnerStopRequest): Promise<boolean | undefined> {
     const record = this.cache.get(request.threadId);
     if (!record || !record.running || record.stopRequested) return Promise.resolve(false);
@@ -232,6 +279,13 @@ export class KabooAgentRunner extends AgentRunner {
 
   // -- LocalThreadEndpointRunner (synchronous, served from the in-memory index) --
 
+  /**
+   * List threads that have at least one persisted event, most recently updated
+   * first, as CopilotKit `LocalThreadEndpointRecord`s. Served synchronously from
+   * the in-memory index (call {@link KabooAgentRunner.hydrate} after a cold start).
+   *
+   * @returns The thread records for CopilotKit's thread-list endpoint.
+   */
   listThreads(): LocalThreadEndpointRecord[] {
     return [...this.cache.entries()]
       .filter(([, r]) => r.events.length > 0)
@@ -248,19 +302,41 @@ export class KabooAgentRunner extends AgentRunner {
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
 
+  /**
+   * Get a thread's derived message snapshot from the in-memory index.
+   *
+   * @param threadId - The thread to read.
+   * @returns A copy of the thread's messages (empty when unknown).
+   */
   getThreadMessages(threadId: string): Message[] {
     return [...(this.cache.get(threadId)?.messages ?? [])];
   }
 
+  /**
+   * Get a thread's full event log from the in-memory index.
+   *
+   * @param threadId - The thread to read.
+   * @returns A copy of the thread's events (empty when unknown).
+   */
   getThreadEvents(threadId: string): BaseEvent[] {
     return [...(this.cache.get(threadId)?.events ?? [])];
   }
 
+  /**
+   * Get a thread's latest derived state (from its last `STATE_SNAPSHOT`).
+   *
+   * @param threadId - The thread to read.
+   * @returns The derived state, or `null` when unknown or never emitted.
+   */
   getThreadState(threadId: string): Record<string, unknown> | null {
     const record = this.cache.get(threadId);
     return record ? deriveState(record.events) : null;
   }
 
+  /**
+   * Clear the in-memory index and the backing store (all threads). Store errors
+   * are routed to {@link KabooRunnerOptions.onStoreError}.
+   */
   clearThreads(): void {
     this.cache.clear();
     void this.store.clear().catch((error) => this.reportStoreError(error, "*", "clear"));

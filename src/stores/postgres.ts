@@ -3,6 +3,11 @@ import type { BaseEvent, Message } from "@ag-ui/client";
 import type { StoredThread, ThreadStore } from "../store";
 import { deriveState } from "../state";
 
+/**
+ * Options for {@link PostgresThreadStore}. Provide exactly one connection
+ * source: either a `dsn` connection string (the store creates and owns its own
+ * `pg.Pool`) or an existing `pool` to reuse. Passing neither throws.
+ */
 export interface PostgresThreadStoreOptions {
   /** Postgres connection string. Ignored when an existing `pool` is passed. */
   dsn?: string;
@@ -15,6 +20,14 @@ export interface PostgresThreadStoreOptions {
  * tables (`kaboo_threads`, `kaboo_thread_events`, `kaboo_thread_messages`),
  * independent of any application schema. `pg` is an optional peer dependency —
  * install it in the host app to use this store.
+ *
+ * @example
+ * ```ts
+ * import { createKabooRunner, PostgresThreadStore } from "kaboo-runtime";
+ *
+ * const store = new PostgresThreadStore({ dsn: process.env.DATABASE_URL });
+ * const runner = createKabooRunner(store);
+ * ```
  */
 export class PostgresThreadStore implements ThreadStore {
   private pool: Pool | null;

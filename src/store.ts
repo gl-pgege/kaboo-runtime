@@ -2,9 +2,13 @@ import type { BaseEvent, Message } from "@ag-ui/client";
 
 /** Lightweight per-thread summary returned by {@link ThreadStore.listThreads}. */
 export interface StoredThread {
+  /** Unique thread id (the CopilotKit `threadId`). */
   id: string;
+  /** Id of the agent that produced the thread's most recent run. */
   agentId: string;
+  /** Creation time, epoch milliseconds. */
   createdAt: number;
+  /** Last-updated time, epoch milliseconds (bumped on every persisted run). */
   updatedAt: number;
 }
 

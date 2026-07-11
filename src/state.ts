@@ -6,6 +6,18 @@ import { EventType, type BaseEvent } from "@ag-ui/client";
  *
  * kaboo-workflows folds each turn's `kaboo_history` into its trailing
  * `STATE_SNAPSHOT`, so this is the authoritative per-thread state/history.
+ *
+ * @param events - A thread's event log, in order.
+ * @returns The last snapshot object, or `null` when there is none.
+ *
+ * @example
+ * ```ts
+ * import { deriveState } from "kaboo-runtime";
+ * import type { BaseEvent } from "@ag-ui/client";
+ *
+ * declare const events: BaseEvent[];
+ * const state = deriveState(events); // Record<string, unknown> | null
+ * ```
  */
 export function deriveState(events: BaseEvent[]): Record<string, unknown> | null {
   for (let i = events.length - 1; i >= 0; i--) {
