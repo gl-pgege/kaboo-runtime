@@ -18,7 +18,7 @@ methods.
 ## Implement `ThreadStore`
 
 This `JsonFileThreadStore` persists every thread to one JSON file. It is the
-runnable [`examples/custom-store`](https://github.com/gl-pgege/@pgege/kaboo-runtime/tree/main/examples/custom-store)
+runnable [`examples/custom-store`](https://github.com/gl-pgege/kaboo-runtime/tree/main/examples/custom-store)
 and is kept in sync with this guide by a drift check:
 
 <!-- source: examples/custom-store/src/store.ts#custom-store -->

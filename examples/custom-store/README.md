@@ -2,7 +2,7 @@
 
 Implements the `ThreadStore` contract against a single JSON file
 (`JsonFileThreadStore`) to demonstrate the extension point. The store class is
-the canonical source for the [Custom store](https://gl-pgege.github.io/@pgege/kaboo-runtime/custom-store/)
+the canonical source for the [Custom store](https://gl-pgege.github.io/kaboo-runtime/custom-store/)
 guide (kept in sync via a drift check).
 
 ## What it shows

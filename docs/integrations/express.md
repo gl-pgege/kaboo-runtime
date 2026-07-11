@@ -27,6 +27,6 @@ app.listen(port, () => {
 ```
 
 For durable persistence, swap in `new PostgresThreadStore({ dsn })` — see
-[`examples/express-postgres`](https://github.com/gl-pgege/@pgege/kaboo-runtime/tree/main/examples/express-postgres).
+[`examples/express-postgres`](https://github.com/gl-pgege/kaboo-runtime/tree/main/examples/express-postgres).
 Add your real agents to the `agents` map (e.g. an `HttpAgent` pointing at a
 kaboo-workflows pipeline).

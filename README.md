@@ -6,8 +6,8 @@
 
 [![npm version](https://img.shields.io/npm/v/kaboo-runtime.svg)](https://www.npmjs.com/package/kaboo-runtime)
 [![license](https://img.shields.io/npm/l/kaboo-runtime.svg)](./LICENSE)
-[![docs](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://gl-pgege.github.io/@pgege/kaboo-runtime/)
-[![CI](https://github.com/gl-pgege/@pgege/kaboo-runtime/actions/workflows/ci.yml/badge.svg)](https://github.com/gl-pgege/@pgege/kaboo-runtime/actions/workflows/ci.yml)
+[![docs](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://gl-pgege.github.io/kaboo-runtime/)
+[![CI](https://github.com/gl-pgege/kaboo-runtime/actions/workflows/ci.yml/badge.svg)](https://github.com/gl-pgege/kaboo-runtime/actions/workflows/ci.yml)
 
 kaboo-runtime makes the server the custodian of conversation history. It drops a
 custom `AgentRunner` into your CopilotKit runtime that records **every** AG-UI
@@ -95,7 +95,7 @@ across restarts — the store auto-creates its own tables on first use.
 ## API reference
 
 Full, auto-generated API docs live on the
-[documentation site](https://gl-pgege.github.io/@pgege/kaboo-runtime/api/). A flat index
+[documentation site](https://gl-pgege.github.io/kaboo-runtime/api/). A flat index
 of every public export is in [docs/api-inventory.md](./docs/api-inventory.md).
 
 ## Examples

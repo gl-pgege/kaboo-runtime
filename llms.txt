@@ -6,19 +6,19 @@ kaboo-runtime drops a custom AgentRunner into a CopilotKit runtime that records 
 
 ## Docs
 
-- [Home](https://gl-pgege.github.io/@pgege/kaboo-runtime/)
-- [Getting started](https://gl-pgege.github.io/@pgege/kaboo-runtime/getting-started/)
-- [Thread stores](https://gl-pgege.github.io/@pgege/kaboo-runtime/thread-stores/)
-- [Custom store](https://gl-pgege.github.io/@pgege/kaboo-runtime/custom-store/)
-- [Replay & state](https://gl-pgege.github.io/@pgege/kaboo-runtime/replay-and-state/)
-- [NestJS integration](https://gl-pgege.github.io/@pgege/kaboo-runtime/integrations/nestjs/)
-- [Express integration](https://gl-pgege.github.io/@pgege/kaboo-runtime/integrations/express/)
-- [API inventory](https://gl-pgege.github.io/@pgege/kaboo-runtime/api-inventory/)
+- [Home](https://gl-pgege.github.io/kaboo-runtime/)
+- [Getting started](https://gl-pgege.github.io/kaboo-runtime/getting-started/)
+- [Thread stores](https://gl-pgege.github.io/kaboo-runtime/thread-stores/)
+- [Custom store](https://gl-pgege.github.io/kaboo-runtime/custom-store/)
+- [Replay & state](https://gl-pgege.github.io/kaboo-runtime/replay-and-state/)
+- [NestJS integration](https://gl-pgege.github.io/kaboo-runtime/integrations/nestjs/)
+- [Express integration](https://gl-pgege.github.io/kaboo-runtime/integrations/express/)
+- [API inventory](https://gl-pgege.github.io/kaboo-runtime/api-inventory/)
 
 ## API
 
-- [API reference](https://gl-pgege.github.io/@pgege/kaboo-runtime/api/): auto-generated TypeDoc.
-- [API inventory](https://gl-pgege.github.io/@pgege/kaboo-runtime/api-inventory/): every public export.
+- [API reference](https://gl-pgege.github.io/kaboo-runtime/api/): auto-generated TypeDoc.
+- [API inventory](https://gl-pgege.github.io/kaboo-runtime/api-inventory/): every public export.
 
 ## Examples
 

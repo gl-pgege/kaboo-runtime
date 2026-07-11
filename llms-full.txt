@@ -8,8 +8,8 @@
 
 [![npm version](https://img.shields.io/npm/v/kaboo-runtime.svg)](https://www.npmjs.com/package/kaboo-runtime)
 [![license](https://img.shields.io/npm/l/kaboo-runtime.svg)](./LICENSE)
-[![docs](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://gl-pgege.github.io/@pgege/kaboo-runtime/)
-[![CI](https://github.com/gl-pgege/@pgege/kaboo-runtime/actions/workflows/ci.yml/badge.svg)](https://github.com/gl-pgege/@pgege/kaboo-runtime/actions/workflows/ci.yml)
+[![docs](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://gl-pgege.github.io/kaboo-runtime/)
+[![CI](https://github.com/gl-pgege/kaboo-runtime/actions/workflows/ci.yml/badge.svg)](https://github.com/gl-pgege/kaboo-runtime/actions/workflows/ci.yml)
 
 kaboo-runtime makes the server the custodian of conversation history. It drops a
 custom `AgentRunner` into your CopilotKit runtime that records **every** AG-UI
@@ -97,7 +97,7 @@ across restarts — the store auto-creates its own tables on first use.
 ## API reference
 
 Full, auto-generated API docs live on the
-[documentation site](https://gl-pgege.github.io/@pgege/kaboo-runtime/api/). A flat index
+[documentation site](https://gl-pgege.github.io/kaboo-runtime/api/). A flat index
 of every public export is in [docs/api-inventory.md](./docs/api-inventory.md).
 
 ## Examples
@@ -442,7 +442,7 @@ methods.
 ## Implement `ThreadStore`
 
 This `JsonFileThreadStore` persists every thread to one JSON file. It is the
-runnable [`examples/custom-store`](https://github.com/gl-pgege/@pgege/kaboo-runtime/tree/main/examples/custom-store)
+runnable [`examples/custom-store`](https://github.com/gl-pgege/kaboo-runtime/tree/main/examples/custom-store)
 and is kept in sync with this guide by a drift check:
 
 <!-- source: examples/custom-store/src/store.ts#custom-store -->
@@ -711,7 +711,7 @@ app.listen(port, () => {
 ```
 
 For durable persistence, swap in `new PostgresThreadStore({ dsn })` — see
-[`examples/express-postgres`](https://github.com/gl-pgege/@pgege/kaboo-runtime/tree/main/examples/express-postgres).
+[`examples/express-postgres`](https://github.com/gl-pgege/kaboo-runtime/tree/main/examples/express-postgres).
 Add your real agents to the `agents` map (e.g. an `HttpAgent` pointing at a
 kaboo-workflows pipeline).
 
