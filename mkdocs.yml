@@ -20,7 +20,13 @@ plugins:
 
 markdown_extensions:
   - admonition
-  - pymdownx.superfences
+  - attr_list
+  - md_in_html
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.highlight
   - pymdownx.inlinehilite
   - toc:
@@ -29,11 +35,14 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting started: getting-started.md
+  - Concepts: concepts.md
   - Thread stores: thread-stores.md
   - Custom store: custom-store.md
   - Replay & state: replay-and-state.md
   - Integrations:
       - NestJS: integrations/nestjs.md
       - Express: integrations/express.md
+  - Troubleshooting: troubleshooting.md
   - API inventory: api-inventory.md
   - ...
+  - Ecosystem: https://gl-pgege.github.io/kaboo-docs/

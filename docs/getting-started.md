@@ -12,6 +12,10 @@
 
 ```bash
 yarn add kaboo-runtime
+# or
+npm install kaboo-runtime
+# or
+pnpm add kaboo-runtime
 ```
 
 ## Wire the runner
@@ -30,6 +34,30 @@ const runtime = new CopilotRuntime({
 
 Mount `runtime` with your framework's CopilotKit handler as usual (see the
 [Express](integrations/express.md) and [NestJS](integrations/nestjs.md) guides).
+
+## Wire a real agent (to kaboo-workflows)
+
+`agents: {}` persists and replays, but there is nothing to run. Register a real
+agent under the `agents` map. The canonical source is an AG-UI endpoint served
+by [kaboo-workflows](https://gl-pgege.github.io/kaboo-workflows/)
+(`kaboo-serve config.yaml`), reached with an `HttpAgent`:
+
+```ts
+import { CopilotRuntime } from "@copilotkit/runtime/v2";
+import { HttpAgent } from "@ag-ui/client";
+import { createKabooRunner, InMemoryThreadStore } from "kaboo-runtime";
+
+const runtime = new CopilotRuntime({
+  agents: {
+    // matches the `entry` agent id in your kaboo-workflows config
+    research_pipeline: new HttpAgent({ url: "http://localhost:8080/invocations" }),
+  },
+  runner: createKabooRunner(new InMemoryThreadStore()),
+});
+```
+
+The runner records that agent's AG-UI stream verbatim and replays it on
+reconnect — no change to the agent itself.
 
 ## Persist to Postgres
 
@@ -69,6 +97,8 @@ const runner = createKabooRunner(new InMemoryThreadStore(), {
 
 ## Next steps
 
+- [Concepts](concepts.md) — the architecture in one page.
 - [Thread stores](thread-stores.md)
 - [Custom store](custom-store.md)
 - [Replay & state](replay-and-state.md)
+- [Troubleshooting](troubleshooting.md)

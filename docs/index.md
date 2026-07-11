@@ -13,6 +13,10 @@ state, and activity — not just the last answer.
 
 ```bash
 yarn add kaboo-runtime
+# or
+npm install kaboo-runtime
+# or
+pnpm add kaboo-runtime
 ```
 
 Peer dependencies: `@ag-ui/client`, `@copilotkit/runtime`, `rxjs`; `pg` is an
@@ -44,8 +48,18 @@ app.listen(port, () => {
 
 ## Next
 
-- [Getting started](getting-started.md) — wire the runner and verify replay.
+- [Getting started](getting-started.md) — wire the runner, a real agent, and verify replay.
+- [Concepts](concepts.md) — the event-log architecture in one page.
 - [Thread stores](thread-stores.md) — in-memory vs Postgres, schema, `dsn` vs `pool`.
 - [Custom store](custom-store.md) — implement `ThreadStore` yourself.
 - [Replay & state](replay-and-state.md) — the event log, `deriveState`, history injection.
+- [Troubleshooting](troubleshooting.md) — peers, replay, and Postgres gotchas.
 - [API reference](api/README.md) — auto-generated from the source.
+
+## The kaboo stack
+
+kaboo-runtime is the persistence layer. It pairs with
+[kaboo-workflows](https://gl-pgege.github.io/kaboo-workflows/) (agent
+orchestration) and [kaboo-react](https://gl-pgege.github.io/kaboo-react/) (UI).
+See [the kaboo stack](https://gl-pgege.github.io/kaboo-docs/) for the whole
+picture.
