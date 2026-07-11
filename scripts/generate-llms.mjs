@@ -58,7 +58,7 @@ llms += "\n## Examples\n\n";
 llms += `- [examples/express-inmemory](${REPO}/tree/main/examples/express-inmemory): smallest end-to-end wiring.\n`;
 llms += `- [examples/express-postgres](${REPO}/tree/main/examples/express-postgres): durable Postgres persistence.\n`;
 llms += `- [examples/custom-store](${REPO}/tree/main/examples/custom-store): implement ThreadStore yourself.\n`;
-llms += `- [kaboo-workflows-demo](https://github.com/gl-pgege/kaboo-workflows-demo): full demo app.\n`;
+llms += `- [kaboo-workflows-demo](https://github.com/gl-pgege/kaboo-docs/tree/main/examples/kaboo-workflows-demo): full demo app.\n`;
 
 llms += "\n## Related\n\n";
 llms += "- [kaboo-workflows](https://github.com/gl-pgege/kaboo-workflows): Python multi-agent orchestration.\n";

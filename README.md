@@ -106,7 +106,7 @@ of every public export is in [docs/api-inventory.md](./docs/api-inventory.md).
   persistence.
 - [`examples/custom-store`](./examples/custom-store) — implement `ThreadStore`
   yourself.
-- The [kaboo-workflows-demo](https://github.com/gl-pgege/kaboo-workflows-demo)
+- The [kaboo-workflows-demo](https://github.com/gl-pgege/kaboo-docs/tree/main/examples/kaboo-workflows-demo)
   backend is the canonical, production-shaped consumer.
 
 ## Compatibility & versioning

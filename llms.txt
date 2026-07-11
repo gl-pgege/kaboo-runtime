@@ -25,7 +25,7 @@ kaboo-runtime drops a custom AgentRunner into a CopilotKit runtime that records 
 - [examples/express-inmemory](https://github.com/gl-pgege/kaboo-runtime/tree/main/examples/express-inmemory): smallest end-to-end wiring.
 - [examples/express-postgres](https://github.com/gl-pgege/kaboo-runtime/tree/main/examples/express-postgres): durable Postgres persistence.
 - [examples/custom-store](https://github.com/gl-pgege/kaboo-runtime/tree/main/examples/custom-store): implement ThreadStore yourself.
-- [kaboo-workflows-demo](https://github.com/gl-pgege/kaboo-workflows-demo): full demo app.
+- [kaboo-workflows-demo](https://github.com/gl-pgege/kaboo-docs/tree/main/examples/kaboo-workflows-demo): full demo app.
 
 ## Related
 

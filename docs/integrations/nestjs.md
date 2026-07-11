@@ -3,7 +3,7 @@
 kaboo-runtime has no HTTP layer, so it works with a Nest app the same way it
 works anywhere: build a `CopilotRuntime` with `createKabooRunner(store)` and mount
 CopilotKit's Express handler on the Nest platform adapter. This is exactly the
-pattern the [demo backend](https://github.com/gl-pgege/kaboo-workflows-demo)
+pattern the [demo backend](https://github.com/gl-pgege/kaboo-docs/tree/main/examples/kaboo-workflows-demo)
 uses.
 
 ```ts no-verify

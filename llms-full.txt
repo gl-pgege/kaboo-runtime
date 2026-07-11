@@ -108,7 +108,7 @@ of every public export is in [docs/api-inventory.md](./docs/api-inventory.md).
   persistence.
 - [`examples/custom-store`](./examples/custom-store) — implement `ThreadStore`
   yourself.
-- The [kaboo-workflows-demo](https://github.com/gl-pgege/kaboo-workflows-demo)
+- The [kaboo-workflows-demo](https://github.com/gl-pgege/kaboo-docs/tree/main/examples/kaboo-workflows-demo)
   backend is the canonical, production-shaped consumer.
 
 ## Compatibility & versioning
@@ -212,6 +212,10 @@ picture.
 # docs/getting-started.md
 
 # Getting started
+
+!!! note "Compatibility"
+    kaboo-runtime targets **Node.js 18+** and CopilotKit runtime **v2**. It plugs
+    in as the runtime's `AgentRunner` and adds no HTTP layer of its own.
 
 ## Prerequisites
 
@@ -624,7 +628,7 @@ benefit is a perfectly reconstructable conversation.
 kaboo-runtime has no HTTP layer, so it works with a Nest app the same way it
 works anywhere: build a `CopilotRuntime` with `createKabooRunner(store)` and mount
 CopilotKit's Express handler on the Nest platform adapter. This is exactly the
-pattern the [demo backend](https://github.com/gl-pgege/kaboo-workflows-demo)
+pattern the [demo backend](https://github.com/gl-pgege/kaboo-docs/tree/main/examples/kaboo-workflows-demo)
 uses.
 
 ```ts no-verify
