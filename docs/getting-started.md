@@ -1,5 +1,9 @@
 # Getting started
 
+!!! note "Compatibility"
+    kaboo-runtime targets **Node.js 18+** and CopilotKit runtime **v2**. It plugs
+    in as the runtime's `AgentRunner` and adds no HTTP layer of its own.
+
 ## Prerequisites
 
 - Node.js >= 18.
