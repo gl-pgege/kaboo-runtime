@@ -1,0 +1,694 @@
+# README.md
+
+# kaboo-runtime
+
+> A persistence plugin for the [CopilotKit](https://copilotkit.ai) runtime: a
+> custom `AgentRunner` + pluggable `ThreadStore` that persists the full AG-UI
+> event log and replays it on reload. Framework-agnostic, no HTTP layer.
+
+[![npm version](https://img.shields.io/npm/v/kaboo-runtime.svg)](https://www.npmjs.com/package/kaboo-runtime)
+[![license](https://img.shields.io/npm/l/kaboo-runtime.svg)](./LICENSE)
+[![docs](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://gl-pgege.github.io/kaboo-runtime/)
+[![CI](https://github.com/gl-pgege/kaboo-runtime/actions/workflows/ci.yml/badge.svg)](https://github.com/gl-pgege/kaboo-runtime/actions/workflows/ci.yml)
+
+kaboo-runtime makes the server the custodian of conversation history. It drops a
+custom `AgentRunner` into your CopilotKit runtime that records **every** AG-UI
+event verbatim to a pluggable store and replays it on reconnect — so a browser
+reload rebuilds the full transcript (messages, tools, state, and activity), not
+just the last answer. It ships no HTTP layer, so it works under any framework you
+already mount CopilotKit with.
+
+## Features
+
+- **Verbatim event log** — the whole AG-UI run stream is persisted uncompacted,
+  so `ACTIVITY_SNAPSHOT` / `CUSTOM` events survive for a full UI replay.
+- **Replay on reload** — reconnecting a thread replays stored turns, then tees
+  any in-flight run.
+- **Server-owned history** — each run's persisted state (including
+  kaboo-workflows' `kaboo_history`) is injected into `input.state`, so the
+  browser is no longer the source of truth.
+- **Pluggable store** — implement the `ThreadStore` interface for any database;
+  `InMemoryThreadStore` and `PostgresThreadStore` ship out of the box.
+- **Framework-agnostic** — no Express/Nest coupling; drop it into
+  `new CopilotRuntime({ agents, runner })`.
+
+## Install
+
+```bash
+yarn add kaboo-runtime
+```
+
+Peer dependencies: `@ag-ui/client`, `@copilotkit/runtime`, and `rxjs`. `pg` is an
+optional peer — install it only if you use `PostgresThreadStore`.
+
+## Quick start
+
+Create a runner bound to a store and pass it to `CopilotRuntime`. That's the
+whole integration — mount the runtime however your framework normally does (here,
+plain Express):
+
+<!-- source: examples/express-inmemory/src/server.ts#quickstart -->
+```ts
+import express from "express";
+import { CopilotRuntime } from "@copilotkit/runtime/v2";
+import { createCopilotExpressHandler } from "@copilotkit/runtime/v2/express";
+import { createKabooRunner, InMemoryThreadStore } from "kaboo-runtime";
+
+const runtime = new CopilotRuntime({
+  agents: {},
+  runner: createKabooRunner(new InMemoryThreadStore()),
+});
+
+const app = express();
+app.use(createCopilotExpressHandler({ runtime, basePath: "/api/copilotkit" }));
+
+const port = Number(process.env.PORT ?? 4000);
+app.listen(port, () => {
+  console.log(`CopilotKit runtime on http://localhost:${port}/api/copilotkit`);
+  console.log("kaboo-runtime persistence: InMemoryThreadStore");
+});
+```
+
+Swap `InMemoryThreadStore` for `new PostgresThreadStore({ dsn })` to persist
+across restarts — the store auto-creates its own tables on first use.
+
+## Core concepts
+
+- **AgentRunner.** `KabooAgentRunner` is a CopilotKit `AgentRunner`. On `run` it
+  injects persisted state and streams events; on completion it appends the run's
+  events + derived messages to the store. On `connect` it replays the stored log.
+- **ThreadStore.** The persistence contract (7 methods). Events are stored
+  verbatim — no compaction — so the full UI can be reconstructed.
+- **Event log vs derived state.** State is not stored separately; `deriveState`
+  scans an event log back to the last `STATE_SNAPSHOT`. History is authoritative
+  in the log.
+- **No HTTP layer.** The runner never touches the network; your host framework
+  owns the endpoint.
+
+## Guides
+
+- [Getting started](./docs/getting-started.md)
+- [Thread stores](./docs/thread-stores.md)
+- [Custom store](./docs/custom-store.md)
+- [Replay & state](./docs/replay-and-state.md)
+- [NestJS integration](./docs/integrations/nestjs.md)
+- [Express integration](./docs/integrations/express.md)
+
+## API reference
+
+Full, auto-generated API docs live on the
+[documentation site](https://gl-pgege.github.io/kaboo-runtime/api/). A flat index
+of every public export is in [docs/api-inventory.md](./docs/api-inventory.md).
+
+## Examples
+
+- [`examples/express-inmemory`](./examples/express-inmemory) — the smallest
+  end-to-end wiring (this README's quick start).
+- [`examples/express-postgres`](./examples/express-postgres) — durable Postgres
+  persistence.
+- [`examples/custom-store`](./examples/custom-store) — implement `ThreadStore`
+  yourself.
+- The [kaboo-workflows-demo](https://github.com/gl-pgege/kaboo-workflows-demo)
+  backend is the canonical, production-shaped consumer.
+
+## Compatibility & versioning
+
+- **Node** >= 18.
+- **CopilotKit** `@copilotkit/runtime` >= 1.62 (peer dep); `@ag-ui/client` and
+  `rxjs` peers; `pg` optional peer.
+- Follows [semantic versioning](https://semver.org). See
+  [CHANGELOG.md](./CHANGELOG.md).
+
+## The kaboo stack
+
+kaboo-runtime is one of three libraries:
+
+- [kaboo-workflows](https://github.com/gl-pgege/kaboo-workflows) — Python
+  multi-agent orchestration.
+- **kaboo-runtime** — this library, the persistence/orchestration layer.
+- [kaboo-react](https://github.com/gl-pgege/kaboo-react) — the UI layer.
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) (humans) and [AGENTS.md](./AGENTS.md)
+(AI contributors).
+
+## License
+
+MIT — see [LICENSE](./LICENSE).
+
+---
+
+# docs/index.md
+
+# kaboo-runtime
+
+> A persistence plugin for the CopilotKit runtime: a custom `AgentRunner` +
+> pluggable `ThreadStore` that persists the full AG-UI event log and replays it
+> on reload. Framework-agnostic, no HTTP layer.
+
+kaboo-runtime makes the **server** the custodian of conversation history. It
+records every AG-UI event verbatim to a pluggable store and replays it on
+reconnect, so a browser reload rebuilds the full transcript — messages, tools,
+state, and activity — not just the last answer.
+
+## Install
+
+```bash
+yarn add kaboo-runtime
+```
+
+Peer dependencies: `@ag-ui/client`, `@copilotkit/runtime`, `rxjs`; `pg` is an
+optional peer for `PostgresThreadStore`.
+
+## Quick start
+
+<!-- source: examples/express-inmemory/src/server.ts#quickstart -->
+```ts
+import express from "express";
+import { CopilotRuntime } from "@copilotkit/runtime/v2";
+import { createCopilotExpressHandler } from "@copilotkit/runtime/v2/express";
+import { createKabooRunner, InMemoryThreadStore } from "kaboo-runtime";
+
+const runtime = new CopilotRuntime({
+  agents: {},
+  runner: createKabooRunner(new InMemoryThreadStore()),
+});
+
+const app = express();
+app.use(createCopilotExpressHandler({ runtime, basePath: "/api/copilotkit" }));
+
+const port = Number(process.env.PORT ?? 4000);
+app.listen(port, () => {
+  console.log(`CopilotKit runtime on http://localhost:${port}/api/copilotkit`);
+  console.log("kaboo-runtime persistence: InMemoryThreadStore");
+});
+```
+
+## Next
+
+- [Getting started](getting-started.md) — wire the runner and verify replay.
+- [Thread stores](thread-stores.md) — in-memory vs Postgres, schema, `dsn` vs `pool`.
+- [Custom store](custom-store.md) — implement `ThreadStore` yourself.
+- [Replay & state](replay-and-state.md) — the event log, `deriveState`, history injection.
+- [API reference](api/) — auto-generated from the source.
+
+---
+
+# docs/getting-started.md
+
+# Getting started
+
+## Prerequisites
+
+- Node.js >= 18.
+- A CopilotKit runtime you host yourself (any framework). kaboo-runtime plugs in
+  as the runtime's `AgentRunner`; it adds no HTTP layer of its own.
+- Peer deps installed: `@ag-ui/client`, `@copilotkit/runtime`, `rxjs`. Add `pg`
+  only if you use `PostgresThreadStore`.
+
+## Install
+
+```bash
+yarn add kaboo-runtime
+```
+
+## Wire the runner
+
+Create a runner bound to a store and pass it to `CopilotRuntime`:
+
+```ts
+import { CopilotRuntime } from "@copilotkit/runtime/v2";
+import { createKabooRunner, InMemoryThreadStore } from "kaboo-runtime";
+
+const runtime = new CopilotRuntime({
+  agents: {},
+  runner: createKabooRunner(new InMemoryThreadStore()),
+});
+```
+
+Mount `runtime` with your framework's CopilotKit handler as usual (see the
+[Express](integrations/express.md) and [NestJS](integrations/nestjs.md) guides).
+
+## Persist to Postgres
+
+Swap the store for a durable one — everything else stays the same. The store
+creates its own tables on first use:
+
+```ts
+import { createKabooRunner, PostgresThreadStore } from "kaboo-runtime";
+
+const runner = createKabooRunner(
+  new PostgresThreadStore({ dsn: process.env.DATABASE_URL }),
+);
+```
+
+## Verify replay
+
+With a store wired in, run a thread, then reload the client. On reconnect the
+runner replays the thread's stored event log verbatim — messages, tool calls,
+state, and activity — before teeing any in-flight run. With `InMemoryThreadStore`
+this survives client reloads for the life of the server process; with
+`PostgresThreadStore` it survives server restarts too.
+
+## Observe store failures
+
+Persistence failures never crash a run — they are reported through `onStoreError`
+(defaulting to `console.error`):
+
+```ts
+import { createKabooRunner, InMemoryThreadStore } from "kaboo-runtime";
+
+const runner = createKabooRunner(new InMemoryThreadStore(), {
+  onStoreError: (error, ctx) => {
+    console.error(`store ${ctx.op} failed for thread ${ctx.threadId}`, error);
+  },
+});
+```
+
+## Next steps
+
+- [Thread stores](thread-stores.md)
+- [Custom store](custom-store.md)
+- [Replay & state](replay-and-state.md)
+
+---
+
+# docs/thread-stores.md
+
+# Thread stores
+
+A `ThreadStore` is where a thread's full AG-UI event log lives. kaboo-runtime
+ships two implementations and lets you write your own
+([Custom store](custom-store.md)).
+
+## The ThreadStore contract
+
+Every store implements seven methods:
+
+| Method | Purpose |
+| --- | --- |
+| `appendEvents(threadId, agentId, events)` | Append a completed run's events, in order. |
+| `readEvents(threadId)` | Read the full event log, verbatim and in order. |
+| `readState(threadId)` | Latest state from the last `STATE_SNAPSHOT`, or `null`. |
+| `saveMessages(threadId, messages)` | Persist the derived message snapshot. |
+| `readMessages(threadId)` | Read the derived message snapshot. |
+| `listThreads()` | Every thread, most recently updated first. |
+| `clear(threadId?)` | Delete one thread, or all when omitted. |
+
+Events are stored **verbatim** — there is no compaction — so `ACTIVITY_SNAPSHOT`
+and `CUSTOM` events survive the round-trip and the full UI can be replayed.
+
+## InMemoryThreadStore
+
+Keeps everything in a `Map` for the life of the process. Ideal for local
+development, tests, and the demo. Data is lost on restart.
+
+```ts
+import { createKabooRunner, InMemoryThreadStore } from "kaboo-runtime";
+
+const runner = createKabooRunner(new InMemoryThreadStore());
+```
+
+## PostgresThreadStore
+
+Durable persistence in Postgres, using its own tables (independent of your
+application schema). `pg` is an optional peer dependency — install it to use this
+store.
+
+```ts
+import { createKabooRunner, PostgresThreadStore } from "kaboo-runtime";
+
+const runner = createKabooRunner(
+  new PostgresThreadStore({ dsn: process.env.DATABASE_URL }),
+);
+```
+
+### Postgres schema
+
+The store creates these tables (and index) on first use — no migration step:
+
+```sql
+CREATE TABLE IF NOT EXISTS kaboo_threads (
+  id text PRIMARY KEY,
+  agent_id text NOT NULL,
+  created_at bigint NOT NULL,
+  updated_at bigint NOT NULL
+);
+CREATE TABLE IF NOT EXISTS kaboo_thread_events (
+  seq bigserial PRIMARY KEY,
+  thread_id text NOT NULL,
+  event jsonb NOT NULL
+);
+CREATE INDEX IF NOT EXISTS kaboo_thread_events_thread_idx
+  ON kaboo_thread_events (thread_id, seq);
+CREATE TABLE IF NOT EXISTS kaboo_thread_messages (
+  thread_id text PRIMARY KEY,
+  messages jsonb NOT NULL,
+  updated_at bigint NOT NULL
+);
+```
+
+### `dsn` vs `pool`
+
+Pass a `dsn` connection string and the store creates and owns its own `pg.Pool`.
+To share an existing pool (e.g. your app already has one), pass `pool` instead:
+
+```ts
+import { Pool } from "pg";
+import { PostgresThreadStore } from "kaboo-runtime";
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const store = new PostgresThreadStore({ pool });
+```
+
+Passing neither `dsn` nor `pool` throws.
+
+## Choosing a store
+
+- **Dev / tests / demo:** `InMemoryThreadStore`.
+- **Production / durable:** `PostgresThreadStore`.
+- **Anything else:** a [custom store](custom-store.md).
+
+---
+
+# docs/custom-store.md
+
+# Custom store
+
+When neither `InMemoryThreadStore` nor `PostgresThreadStore` fits, implement the
+`ThreadStore` interface against your own datastore. A store is just seven async
+methods.
+
+## The contract
+
+- **Store events verbatim.** `appendEvents` must preserve order and never drop or
+  compact events — the full UI is reconstructed from them.
+- **Derive state, don't invent it.** `readState` should return the last
+  `STATE_SNAPSHOT`; use the exported `deriveState` helper so behavior matches the
+  built-in stores.
+- **`listThreads` is most-recent-first.**
+- **`clear(id?)`** deletes one thread when given an id, or all threads when
+  omitted.
+
+## Implement `ThreadStore`
+
+This `JsonFileThreadStore` persists every thread to one JSON file. It is the
+runnable [`examples/custom-store`](https://github.com/gl-pgege/kaboo-runtime/tree/main/examples/custom-store)
+and is kept in sync with this guide by a drift check:
+
+<!-- source: examples/custom-store/src/store.ts#custom-store -->
+```ts
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import type { BaseEvent, Message } from "@ag-ui/client";
+import { deriveState, type StoredThread, type ThreadStore } from "kaboo-runtime";
+
+interface Row {
+  agentId: string;
+  events: BaseEvent[];
+  messages: Message[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * A minimal ThreadStore that persists every thread to a single JSON file.
+ * Demonstrates the extension point — events are stored verbatim and state is
+ * derived with `deriveState`. Not tuned for concurrency or scale.
+ */
+export class JsonFileThreadStore implements ThreadStore {
+  private readonly data: Record<string, Row>;
+
+  constructor(private readonly file: string) {
+    this.data = existsSync(file)
+      ? (JSON.parse(readFileSync(file, "utf8")) as Record<string, Row>)
+      : {};
+  }
+
+  private flush(): void {
+    writeFileSync(this.file, JSON.stringify(this.data));
+  }
+
+  private row(threadId: string, agentId: string): Row {
+    let row = this.data[threadId];
+    if (!row) {
+      const now = Date.now();
+      row = { agentId, events: [], messages: [], createdAt: now, updatedAt: now };
+      this.data[threadId] = row;
+    }
+    return row;
+  }
+
+  async appendEvents(threadId: string, agentId: string, events: BaseEvent[]): Promise<void> {
+    const row = this.row(threadId, agentId);
+    row.agentId = agentId;
+    row.events.push(...events);
+    row.updatedAt = Date.now();
+    this.flush();
+  }
+
+  async readEvents(threadId: string): Promise<BaseEvent[]> {
+    return [...(this.data[threadId]?.events ?? [])];
+  }
+
+  async readState(threadId: string): Promise<Record<string, unknown> | null> {
+    return deriveState(this.data[threadId]?.events ?? []);
+  }
+
+  async saveMessages(threadId: string, messages: Message[]): Promise<void> {
+    const row = this.data[threadId];
+    if (row) {
+      row.messages = [...messages];
+      row.updatedAt = Date.now();
+      this.flush();
+    }
+  }
+
+  async readMessages(threadId: string): Promise<Message[]> {
+    return [...(this.data[threadId]?.messages ?? [])];
+  }
+
+  async listThreads(): Promise<StoredThread[]> {
+    return Object.entries(this.data)
+      .map(([id, r]) => ({ id, agentId: r.agentId, createdAt: r.createdAt, updatedAt: r.updatedAt }))
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  async clear(threadId?: string): Promise<void> {
+    if (threadId === undefined) {
+      for (const key of Object.keys(this.data)) delete this.data[key];
+    } else {
+      delete this.data[threadId];
+    }
+    this.flush();
+  }
+}
+```
+
+## Wire it up
+
+A custom store drops into `createKabooRunner` exactly like the built-ins:
+
+```ts no-verify
+import { createKabooRunner } from "kaboo-runtime";
+import { JsonFileThreadStore } from "./store";
+
+const runner = createKabooRunner(new JsonFileThreadStore("./threads.json"));
+```
+
+---
+
+# docs/replay-and-state.md
+
+# Replay & state
+
+kaboo-runtime treats the AG-UI event log as the single source of truth. Messages,
+tools, state, and activity are all reconstructed from it — there is no separate,
+hand-maintained state blob.
+
+## The event log
+
+Each run's events are appended to the thread's log **verbatim and in order**.
+Nothing is compacted, so `ACTIVITY_SNAPSHOT` and `CUSTOM` events (the ones a rich
+UI like [kaboo-react](https://github.com/gl-pgege/kaboo-react) needs) survive the
+round-trip. `readEvents(threadId)` returns exactly what was emitted.
+
+## Deriving state
+
+State is not stored on its own. `deriveState` scans an event log backwards for
+the last `STATE_SNAPSHOT` and returns its snapshot object (or `null`):
+
+```ts
+import { deriveState } from "kaboo-runtime";
+import type { BaseEvent } from "@ag-ui/client";
+
+declare const events: BaseEvent[];
+const state = deriveState(events); // Record<string, unknown> | null
+```
+
+The built-in stores use `deriveState` for `readState`, and so should custom
+stores, so behavior is identical everywhere.
+
+## `kaboo_history` injection
+
+kaboo-workflows folds each turn's `kaboo_history` into its trailing
+`STATE_SNAPSHOT`. Before every run, `KabooAgentRunner` reads the thread's
+persisted state and merges it into `input.state` (persisted values first, then
+any incoming state), so multi-agent history is seeded from the server rather than
+the browser. The client no longer has to carry conversation history.
+
+## Replay on reconnect
+
+`connect(threadId)` replays the thread's stored log, then tees any in-flight run:
+
+- If nothing is running, it emits the stored events and completes.
+- If a run is in flight (its events aren't persisted until completion), it emits
+  the stored prior turns and then forwards live events from the running run.
+
+This is what lets a browser reload — or a second tab — rebuild the full
+transcript and then continue watching live work.
+
+## Warming the index after a cold start
+
+The synchronous thread-query methods (`listThreads`, `getThreadEvents`, …) read
+an in-memory index. After a process restart, call `hydrate()` once to populate it
+from the store (individual `run`/`connect` calls also hydrate their own thread
+lazily):
+
+```ts
+import { KabooAgentRunner, InMemoryThreadStore } from "kaboo-runtime";
+
+async function main() {
+  const runner = new KabooAgentRunner(new InMemoryThreadStore());
+  await runner.hydrate();
+  return runner.listThreads();
+}
+```
+
+## No compaction
+
+Unlike the stock in-memory runner, kaboo-runtime never trims or summarizes the
+log. Durability + verbatim storage is the whole point: the cost is storage, the
+benefit is a perfectly reconstructable conversation.
+
+---
+
+# docs/integrations/nestjs.md
+
+# NestJS integration
+
+kaboo-runtime has no HTTP layer, so it works with a Nest app the same way it
+works anywhere: build a `CopilotRuntime` with `createKabooRunner(store)` and mount
+CopilotKit's Express handler on the Nest platform adapter. This is exactly the
+pattern the [demo backend](https://github.com/gl-pgege/kaboo-workflows-demo)
+uses.
+
+```ts no-verify
+import { NestFactory } from "@nestjs/core";
+import { NestExpressApplication } from "@nestjs/platform-express";
+import { AppModule } from "./app.module";
+import { CopilotRuntime } from "@copilotkit/runtime/v2";
+import { createCopilotExpressHandler } from "@copilotkit/runtime/v2/express";
+import { HttpAgent } from "@ag-ui/client";
+import {
+  createKabooRunner,
+  InMemoryThreadStore,
+  PostgresThreadStore,
+  type ThreadStore,
+} from "kaboo-runtime";
+
+async function bootstrap() {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  const dsn = process.env.DATABASE_URL;
+  const store: ThreadStore = dsn
+    ? new PostgresThreadStore({ dsn })
+    : new InMemoryThreadStore();
+
+  const runtime = new CopilotRuntime({
+    agents: {
+      research_pipeline: new HttpAgent({
+        url: process.env.PIPELINE_SERVICE_URL ?? "http://localhost:8080/invocations",
+      }),
+    },
+    runner: createKabooRunner(store),
+  });
+
+  app.use(createCopilotExpressHandler({ runtime, basePath: "/api/copilotkit" }));
+  app.enableCors();
+
+  await app.listen(process.env.PORT ?? 4000);
+}
+
+bootstrap();
+```
+
+Notes:
+
+- Store selection by `DATABASE_URL` gives you zero-config in-memory locally and
+  durable Postgres in production without code changes.
+- Because the runner is transport-agnostic, the same wiring works with any Nest
+  HTTP adapter that can mount an Express-style handler.
+
+---
+
+# docs/integrations/express.md
+
+# Express integration
+
+On a plain Express app, build a `CopilotRuntime` with `createKabooRunner(store)`
+and mount CopilotKit's Express handler. The runner ships no HTTP layer, so this is
+the whole integration:
+
+<!-- source: examples/express-inmemory/src/server.ts#quickstart -->
+```ts
+import express from "express";
+import { CopilotRuntime } from "@copilotkit/runtime/v2";
+import { createCopilotExpressHandler } from "@copilotkit/runtime/v2/express";
+import { createKabooRunner, InMemoryThreadStore } from "kaboo-runtime";
+
+const runtime = new CopilotRuntime({
+  agents: {},
+  runner: createKabooRunner(new InMemoryThreadStore()),
+});
+
+const app = express();
+app.use(createCopilotExpressHandler({ runtime, basePath: "/api/copilotkit" }));
+
+const port = Number(process.env.PORT ?? 4000);
+app.listen(port, () => {
+  console.log(`CopilotKit runtime on http://localhost:${port}/api/copilotkit`);
+  console.log("kaboo-runtime persistence: InMemoryThreadStore");
+});
+```
+
+For durable persistence, swap in `new PostgresThreadStore({ dsn })` — see
+[`examples/express-postgres`](https://github.com/gl-pgege/kaboo-runtime/tree/main/examples/express-postgres).
+Add your real agents to the `agents` map (e.g. an `HttpAgent` pointing at a
+kaboo-workflows pipeline).
+
+---
+
+# docs/api-inventory.md
+
+# API inventory
+
+Generated by `yarn docs:api` from the TypeDoc output. Every public export of `kaboo-runtime` is listed here. Do not edit by hand.
+
+## Functions
+
+- [`createKabooRunner`](api/functions/createKabooRunner.md)
+- [`deriveState`](api/functions/deriveState.md)
+
+## Classes
+
+- [`InMemoryThreadStore`](api/classes/InMemoryThreadStore.md)
+- [`KabooAgentRunner`](api/classes/KabooAgentRunner.md)
+- [`PostgresThreadStore`](api/classes/PostgresThreadStore.md)
+
+## Interfaces
+
+- [`KabooRunnerOptions`](api/interfaces/KabooRunnerOptions.md)
+- [`PostgresThreadStoreOptions`](api/interfaces/PostgresThreadStoreOptions.md)
+- [`StoredThread`](api/interfaces/StoredThread.md)
+- [`ThreadStore`](api/interfaces/ThreadStore.md)

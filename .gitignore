@@ -1,9 +1,22 @@
 # Dependencies
 node_modules/
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
 .pnp.*
 
 # Build output
 dist/
+
+# Docs site build output
+site/
+.mkdocs-venv/
+
+# Docs verification scratch
+.docs-verify/
 
 # Logs
 *.log

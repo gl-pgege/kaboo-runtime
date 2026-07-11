@@ -1,0 +1,33 @@
+# kaboo-runtime
+
+> A persistence plugin for the CopilotKit runtime: a custom AgentRunner + pluggable ThreadStore that persists the full AG-UI event log and replays it on reload. Framework-agnostic, no HTTP layer.
+
+kaboo-runtime drops a custom AgentRunner into a CopilotKit runtime that records every AG-UI event verbatim to a pluggable ThreadStore and replays it on reconnect, so a reload rebuilds the full transcript (messages, tools, state, activity). It ships `InMemoryThreadStore` and `PostgresThreadStore`, and has no HTTP layer of its own.
+
+## Docs
+
+- [Home](https://gl-pgege.github.io/kaboo-runtime/)
+- [Getting started](https://gl-pgege.github.io/kaboo-runtime/getting-started/)
+- [Thread stores](https://gl-pgege.github.io/kaboo-runtime/thread-stores/)
+- [Custom store](https://gl-pgege.github.io/kaboo-runtime/custom-store/)
+- [Replay & state](https://gl-pgege.github.io/kaboo-runtime/replay-and-state/)
+- [NestJS integration](https://gl-pgege.github.io/kaboo-runtime/integrations/nestjs/)
+- [Express integration](https://gl-pgege.github.io/kaboo-runtime/integrations/express/)
+- [API inventory](https://gl-pgege.github.io/kaboo-runtime/api-inventory/)
+
+## API
+
+- [API reference](https://gl-pgege.github.io/kaboo-runtime/api/): auto-generated TypeDoc.
+- [API inventory](https://gl-pgege.github.io/kaboo-runtime/api-inventory/): every public export.
+
+## Examples
+
+- [examples/express-inmemory](https://github.com/gl-pgege/kaboo-runtime/tree/main/examples/express-inmemory): smallest end-to-end wiring.
+- [examples/express-postgres](https://github.com/gl-pgege/kaboo-runtime/tree/main/examples/express-postgres): durable Postgres persistence.
+- [examples/custom-store](https://github.com/gl-pgege/kaboo-runtime/tree/main/examples/custom-store): implement ThreadStore yourself.
+- [kaboo-workflows-demo](https://github.com/gl-pgege/kaboo-workflows-demo): full demo app.
+
+## Related
+
+- [kaboo-workflows](https://github.com/gl-pgege/kaboo-workflows): Python multi-agent orchestration.
+- [kaboo-react](https://github.com/gl-pgege/kaboo-react): React UI for kaboo activity in a CopilotKit app.

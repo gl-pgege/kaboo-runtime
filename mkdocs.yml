@@ -1,0 +1,39 @@
+site_name: kaboo-runtime
+site_url: https://gl-pgege.github.io/kaboo-runtime/
+site_description: A persistence plugin for the CopilotKit runtime — a custom AgentRunner + pluggable ThreadStore that persists the full AG-UI event log and replays it on reload.
+repo_url: https://github.com/gl-pgege/kaboo-runtime
+docs_dir: docs
+
+theme:
+  name: material
+  logo: assets/kaboo-icon.svg
+  favicon: assets/kaboo-icon.svg
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - awesome-pages
+
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Thread stores: thread-stores.md
+  - Custom store: custom-store.md
+  - Replay & state: replay-and-state.md
+  - Integrations:
+      - NestJS: integrations/nestjs.md
+      - Express: integrations/express.md
+  - API inventory: api-inventory.md
+  - ...
