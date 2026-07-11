@@ -1,4 +1,4 @@
-[**kaboo-runtime**](../README.md)
+[**@kaboo/runtime**](../README.md)
 
 ***
 

@@ -2,7 +2,7 @@
 import express from "express";
 import { CopilotRuntime } from "@copilotkit/runtime/v2";
 import { createCopilotExpressHandler } from "@copilotkit/runtime/v2/express";
-import { createKabooRunner, InMemoryThreadStore } from "kaboo-runtime";
+import { createKabooRunner, InMemoryThreadStore } from "@kaboo/runtime";
 
 const runtime = new CopilotRuntime({
   agents: {},

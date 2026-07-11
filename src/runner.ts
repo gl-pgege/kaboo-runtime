@@ -46,7 +46,7 @@ interface ThreadRuntime {
  * @example
  * ```ts
  * import { CopilotRuntime } from "@copilotkit/runtime/v2";
- * import { KabooAgentRunner, InMemoryThreadStore } from "kaboo-runtime";
+ * import { KabooAgentRunner, InMemoryThreadStore } from "@kaboo/runtime";
  *
  * const runtime = new CopilotRuntime({
  *   agents: {},

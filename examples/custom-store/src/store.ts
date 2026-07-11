@@ -1,7 +1,7 @@
 // #region custom-store
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import type { BaseEvent, Message } from "@ag-ui/client";
-import { deriveState, type StoredThread, type ThreadStore } from "kaboo-runtime";
+import { deriveState, type StoredThread, type ThreadStore } from "@kaboo/runtime";
 
 interface Row {
   agentId: string;

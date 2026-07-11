@@ -9,7 +9,7 @@
     "noEmit": true,
     "types": ["node"],
     "paths": {
-      "kaboo-runtime": ["../../dist/index.d.ts"]
+      "@kaboo/runtime": ["../../dist/index.d.ts"]
     }
   },
   "include": ["src"]

@@ -22,5 +22,5 @@ Initial release.
 - `PostgresThreadStore` — durable store backed by its own `kaboo_*` tables.
 - `deriveState(events)` — derive the latest agent state from an event log.
 
-[Unreleased]: https://github.com/gl-pgege/kaboo-runtime/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/gl-pgege/kaboo-runtime/releases/tag/v0.1.0
+[Unreleased]: https://github.com/gl-pgege/@kaboo/runtime/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/gl-pgege/@kaboo/runtime/releases/tag/v0.1.0

@@ -1,5 +1,5 @@
 {
-  "name": "kaboo-runtime",
+  "name": "@kaboo/runtime",
   "version": "0.1.0",
   "description": "A persistence plugin for the CopilotKit runtime: a custom AgentRunner + pluggable ThreadStore that persists the full AG-UI event log and replays it on reload. Framework-agnostic, no HTTP layer.",
   "author": "gl-pgege",
@@ -10,9 +10,9 @@
     "type": "git",
     "url": "git+https://github.com/gl-pgege/kaboo-runtime.git"
   },
-  "homepage": "https://gl-pgege.github.io/kaboo-runtime/",
+  "homepage": "https://gl-pgege.github.io/@kaboo/runtime/",
   "bugs": {
-    "url": "https://github.com/gl-pgege/kaboo-runtime/issues"
+    "url": "https://github.com/gl-pgege/@kaboo/runtime/issues"
   },
   "engines": {
     "node": ">=18"

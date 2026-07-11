@@ -23,7 +23,7 @@ export interface PostgresThreadStoreOptions {
  *
  * @example
  * ```ts
- * import { createKabooRunner, PostgresThreadStore } from "kaboo-runtime";
+ * import { createKabooRunner, PostgresThreadStore } from "@kaboo/runtime";
  *
  * const store = new PostgresThreadStore({ dsn: process.env.DATABASE_URL });
  * const runner = createKabooRunner(store);

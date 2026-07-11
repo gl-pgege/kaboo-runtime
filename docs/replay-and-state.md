@@ -17,7 +17,7 @@ State is not stored on its own. `deriveState` scans an event log backwards for
 the last `STATE_SNAPSHOT` and returns its snapshot object (or `null`):
 
 ```ts
-import { deriveState } from "kaboo-runtime";
+import { deriveState } from "@kaboo/runtime";
 import type { BaseEvent } from "@ag-ui/client";
 
 declare const events: BaseEvent[];
@@ -54,7 +54,7 @@ from the store (individual `run`/`connect` calls also hydrate their own thread
 lazily):
 
 ```ts
-import { KabooAgentRunner, InMemoryThreadStore } from "kaboo-runtime";
+import { KabooAgentRunner, InMemoryThreadStore } from "@kaboo/runtime";
 
 async function main() {
   const runner = new KabooAgentRunner(new InMemoryThreadStore());
