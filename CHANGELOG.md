@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1]
+
+### Fixed
+
+- Corrected `homepage`, `bugs`, badge, and documentation URLs that were
+  accidentally rewritten to include the package scope during the `@pgege`
+  rename (e.g. `github.io/@pgege/kaboo-runtime` → `github.io/kaboo-runtime`).
+
 ## [0.1.0]
 
 Initial release.
@@ -22,5 +30,6 @@ Initial release.
 - `PostgresThreadStore` — durable store backed by its own `kaboo_*` tables.
 - `deriveState(events)` — derive the latest agent state from an event log.
 
-[Unreleased]: https://github.com/gl-pgege/kaboo-runtime/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/gl-pgege/kaboo-runtime/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/gl-pgege/kaboo-runtime/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/gl-pgege/kaboo-runtime/releases/tag/v0.1.0
