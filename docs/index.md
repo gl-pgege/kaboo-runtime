@@ -12,11 +12,11 @@ state, and activity — not just the last answer.
 ## Install
 
 ```bash
-yarn add @pgege/kaboo-runtime
+yarn add kaboo-runtime
 # or
-npm install @pgege/kaboo-runtime
+npm install kaboo-runtime
 # or
-pnpm add @pgege/kaboo-runtime
+pnpm add kaboo-runtime
 ```
 
 Peer dependencies: `@ag-ui/client`, `@copilotkit/runtime`, `rxjs`; `pg` is an
@@ -29,7 +29,7 @@ optional peer for `PostgresThreadStore`.
 import express from "express";
 import { CopilotRuntime } from "@copilotkit/runtime/v2";
 import { createCopilotExpressHandler } from "@copilotkit/runtime/v2/express";
-import { createKabooRunner, InMemoryThreadStore } from "@pgege/kaboo-runtime";
+import { createKabooRunner, InMemoryThreadStore } from "kaboo-runtime";
 
 const runtime = new CopilotRuntime({
   agents: {},
