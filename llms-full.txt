@@ -155,11 +155,11 @@ state, and activity — not just the last answer.
 ## Install
 
 ```bash
-yarn add @pgege/kaboo-runtime
+yarn add kaboo-runtime
 # or
-npm install @pgege/kaboo-runtime
+npm install kaboo-runtime
 # or
-pnpm add @pgege/kaboo-runtime
+pnpm add kaboo-runtime
 ```
 
 Peer dependencies: `@ag-ui/client`, `@copilotkit/runtime`, `rxjs`; `pg` is an
