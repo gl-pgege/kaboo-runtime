@@ -1,9 +1,10 @@
 import type { BaseEvent, Message } from "@ag-ui/client";
-import type { StoredThread, ThreadStore } from "../store";
+import type { ListThreadsFilter, StoredThread, ThreadStore } from "../store";
 import { deriveState } from "../state";
 
 interface MemoryRecord {
   agentId: string;
+  ownerId: string | null;
   events: BaseEvent[];
   messages: Message[];
   createdAt: number;
@@ -29,15 +30,21 @@ export class InMemoryThreadStore implements ThreadStore {
     let record = this.threads.get(threadId);
     if (!record) {
       const now = Date.now();
-      record = { agentId, events: [], messages: [], createdAt: now, updatedAt: now };
+      record = { agentId, ownerId: null, events: [], messages: [], createdAt: now, updatedAt: now };
       this.threads.set(threadId, record);
     }
     return record;
   }
 
-  async appendEvents(threadId: string, agentId: string, events: BaseEvent[]): Promise<void> {
+  async appendEvents(
+    threadId: string,
+    agentId: string,
+    events: BaseEvent[],
+    ownerId?: string | null,
+  ): Promise<void> {
     const record = this.record(threadId, agentId);
     record.agentId = agentId;
+    if (ownerId != null) record.ownerId = ownerId;
     record.events.push(...events);
     record.updatedAt = Date.now();
   }
@@ -63,9 +70,16 @@ export class InMemoryThreadStore implements ThreadStore {
     return [...(this.threads.get(threadId)?.messages ?? [])];
   }
 
-  async listThreads(): Promise<StoredThread[]> {
+  async listThreads(filter?: ListThreadsFilter): Promise<StoredThread[]> {
     return [...this.threads.entries()]
-      .map(([id, r]) => ({ id, agentId: r.agentId, createdAt: r.createdAt, updatedAt: r.updatedAt }))
+      .filter(([, r]) => filter?.ownerId === undefined || r.ownerId === filter.ownerId)
+      .map(([id, r]) => ({
+        id,
+        agentId: r.agentId,
+        ownerId: r.ownerId,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      }))
       .sort((a, b) => b.updatedAt - a.updatedAt);
   }
 

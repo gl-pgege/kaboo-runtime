@@ -25,10 +25,16 @@ and is kept in sync with this guide by a drift check:
 ```ts
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import type { BaseEvent, Message } from "@ag-ui/client";
-import { deriveState, type StoredThread, type ThreadStore } from "@pgege/kaboo-runtime";
+import {
+  deriveState,
+  type ListThreadsFilter,
+  type StoredThread,
+  type ThreadStore,
+} from "@pgege/kaboo-runtime";
 
 interface Row {
   agentId: string;
+  ownerId: string | null;
   events: BaseEvent[];
   messages: Message[];
   createdAt: number;
@@ -57,15 +63,21 @@ export class JsonFileThreadStore implements ThreadStore {
     let row = this.data[threadId];
     if (!row) {
       const now = Date.now();
-      row = { agentId, events: [], messages: [], createdAt: now, updatedAt: now };
+      row = { agentId, ownerId: null, events: [], messages: [], createdAt: now, updatedAt: now };
       this.data[threadId] = row;
     }
     return row;
   }
 
-  async appendEvents(threadId: string, agentId: string, events: BaseEvent[]): Promise<void> {
+  async appendEvents(
+    threadId: string,
+    agentId: string,
+    events: BaseEvent[],
+    ownerId?: string | null,
+  ): Promise<void> {
     const row = this.row(threadId, agentId);
     row.agentId = agentId;
+    if (ownerId != null) row.ownerId = ownerId;
     row.events.push(...events);
     row.updatedAt = Date.now();
     this.flush();
@@ -92,9 +104,16 @@ export class JsonFileThreadStore implements ThreadStore {
     return [...(this.data[threadId]?.messages ?? [])];
   }
 
-  async listThreads(): Promise<StoredThread[]> {
+  async listThreads(filter?: ListThreadsFilter): Promise<StoredThread[]> {
     return Object.entries(this.data)
-      .map(([id, r]) => ({ id, agentId: r.agentId, createdAt: r.createdAt, updatedAt: r.updatedAt }))
+      .filter(([, r]) => filter?.ownerId === undefined || (r.ownerId ?? null) === filter.ownerId)
+      .map(([id, r]) => ({
+        id,
+        agentId: r.agentId,
+        ownerId: r.ownerId ?? null,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      }))
       .sort((a, b) => b.updatedAt - a.updatedAt);
   }
 

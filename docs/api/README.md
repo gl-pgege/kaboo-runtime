@@ -12,7 +12,9 @@
 
 ## Interfaces
 
+- [KabooAccessPolicy](interfaces/KabooAccessPolicy.md)
 - [KabooRunnerOptions](interfaces/KabooRunnerOptions.md)
+- [ListThreadsFilter](interfaces/ListThreadsFilter.md)
 - [PostgresThreadStoreOptions](interfaces/PostgresThreadStoreOptions.md)
 - [StoredThread](interfaces/StoredThread.md)
 - [ThreadStore](interfaces/ThreadStore.md)

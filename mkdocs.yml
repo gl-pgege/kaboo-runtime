@@ -38,6 +38,7 @@ nav:
   - Concepts: concepts.md
   - Thread stores: thread-stores.md
   - Custom store: custom-store.md
+  - Access control: access-control.md
   - Replay & state: replay-and-state.md
   - Integrations:
       - NestJS: integrations/nestjs.md

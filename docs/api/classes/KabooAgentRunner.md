@@ -4,7 +4,7 @@
 
 # Class: KabooAgentRunner
 
-Defined in: [src/runner.ts:57](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L57)
+Defined in: [src/runner.ts:85](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L85)
 
 A CopilotKit `AgentRunner` that persists the full AG-UI event log to a
 pluggable [ThreadStore](../interfaces/ThreadStore.md) and replays it verbatim on reconnect. Drop it
@@ -39,7 +39,7 @@ const runtime = new CopilotRuntime({
 
 > **new KabooAgentRunner**(`store`, `options?`): `KabooAgentRunner`
 
-Defined in: [src/runner.ts:67](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L67)
+Defined in: [src/runner.ts:95](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L95)
 
 #### Parameters
 
@@ -69,10 +69,11 @@ Optional hooks (e.g. [KabooRunnerOptions.onStoreError](../interfaces/KabooRunner
 
 > **clearThreads**(): `void`
 
-Defined in: [src/runner.ts:340](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L340)
+Defined in: [src/runner.ts:383](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L383)
 
 Clear the in-memory index and the backing store (all threads). Store errors
-are routed to [KabooRunnerOptions.onStoreError](../interfaces/KabooRunnerOptions.md#onstoreerror).
+are routed to [KabooRunnerOptions.onStoreError](../interfaces/KabooRunnerOptions.md#onstoreerror). Throws when the
+access policy sets `allowClearAll: false`.
 
 #### Returns
 
@@ -84,7 +85,7 @@ are routed to [KabooRunnerOptions.onStoreError](../interfaces/KabooRunnerOptions
 
 > **connect**(`request`): `Observable`\<`objectOutputType`\<\{ `rawEvent`: `ZodOptional`\<`ZodAny`\>; `timestamp`: `ZodOptional`\<`ZodNumber`\>; `type`: `ZodNativeEnum`\<*typeof* `EventType`\>; \}, `ZodTypeAny`, `"passthrough"`\>\>
 
-Defined in: [src/runner.ts:217](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L217)
+Defined in: [src/runner.ts:252](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L252)
 
 Replay a thread's stored event log, then tee any in-flight run so a
 reconnecting client sees prior turns followed by live events. Completes
@@ -114,7 +115,7 @@ An observable that emits the stored log and, if running, live events.
 
 > **getThreadEvents**(`threadId`): `objectOutputType`\<\{ `rawEvent`: `ZodOptional`\<`ZodAny`\>; `timestamp`: `ZodOptional`\<`ZodNumber`\>; `type`: `ZodNativeEnum`\<*typeof* `EventType`\>; \}, `ZodTypeAny`, `"passthrough"`\>[]
 
-Defined in: [src/runner.ts:321](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L321)
+Defined in: [src/runner.ts:363](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L363)
 
 Get a thread's full event log from the in-memory index.
 
@@ -138,7 +139,7 @@ A copy of the thread's events (empty when unknown).
 
 > **getThreadMessages**(`threadId`): (\{ `content`: `string`; `encryptedValue?`: `string`; `id`: `string`; `name?`: `string`; `role`: `"developer"`; \} \| \{ `content`: `string`; `encryptedValue?`: `string`; `id`: `string`; `name?`: `string`; `role`: `"system"`; \} \| \{ `content?`: `string`; `encryptedValue?`: `string`; `id`: `string`; `name?`: `string`; `role`: `"assistant"`; `toolCalls?`: `object`[]; \} \| \{ `content`: `string` \| (\{ `text`: `string`; `type`: `"text"`; \} \| \{ `metadata?`: `unknown`; `source`: \{ `mimeType`: `string`; `type`: `"data"`; `value`: `string`; \} \| \{ `mimeType?`: `string`; `type`: `"url"`; `value`: `string`; \}; `type`: `"image"`; \} \| \{ `metadata?`: `unknown`; `source`: \{ `mimeType`: `string`; `type`: `"data"`; `value`: `string`; \} \| \{ `mimeType?`: `string`; `type`: `"url"`; `value`: `string`; \}; `type`: `"audio"`; \} \| \{ `metadata?`: `unknown`; `source`: \{ `mimeType`: `string`; `type`: `"data"`; `value`: `string`; \} \| \{ `mimeType?`: `string`; `type`: `"url"`; `value`: `string`; \}; `type`: `"video"`; \} \| \{ `metadata?`: `unknown`; `source`: \{ `mimeType`: `string`; `type`: `"data"`; `value`: `string`; \} \| \{ `mimeType?`: `string`; `type`: `"url"`; `value`: `string`; \}; `type`: `"document"`; \} \| \{ `data?`: `string`; `filename?`: `string`; `id?`: `string`; `mimeType`: `string`; `type`: `"binary"`; `url?`: `string`; \})[]; `encryptedValue?`: `string`; `id`: `string`; `name?`: `string`; `role`: `"user"`; \} \| \{ `content`: `string`; `encryptedValue?`: `string`; `error?`: `string`; `id`: `string`; `role`: `"tool"`; `toolCallId`: `string`; \} \| \{ `activityType`: `string`; `content`: `Record`\<`string`, `any`\>; `id`: `string`; `role`: `"activity"`; \} \| \{ `content`: `string`; `encryptedValue?`: `string`; `id`: `string`; `role`: `"reasoning"`; \})[]
 
-Defined in: [src/runner.ts:311](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L311)
+Defined in: [src/runner.ts:353](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L353)
 
 Get a thread's derived message snapshot from the in-memory index.
 
@@ -162,7 +163,7 @@ A copy of the thread's messages (empty when unknown).
 
 > **getThreadState**(`threadId`): `Record`\<`string`, `unknown`\> \| `null`
 
-Defined in: [src/runner.ts:331](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L331)
+Defined in: [src/runner.ts:373](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L373)
 
 Get a thread's latest derived state (from its last `STATE_SNAPSHOT`).
 
@@ -186,7 +187,7 @@ The derived state, or `null` when unknown or never emitted.
 
 > **hydrate**(): `Promise`\<`void`\>
 
-Defined in: [src/runner.ts:79](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L79)
+Defined in: [src/runner.ts:107](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L107)
 
 Warm the in-memory index from the store so the synchronous thread-query
 methods (`listThreads`, `getThreadEvents`, ...) work after a cold start.
@@ -202,7 +203,7 @@ Optional: `run`/`connect` also hydrate their own thread lazily.
 
 > **isRunning**(`request`): `Promise`\<`boolean`\>
 
-Defined in: [src/runner.ts:253](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L253)
+Defined in: [src/runner.ts:288](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L288)
 
 Report whether a thread currently has a run in flight.
 
@@ -230,11 +231,18 @@ The is-running request (`threadId`).
 
 > **listThreads**(): `LocalThreadEndpointRecord`[]
 
-Defined in: [src/runner.ts:289](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L289)
+Defined in: [src/runner.ts:331](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L331)
 
 List threads that have at least one persisted event, most recently updated
 first, as CopilotKit `LocalThreadEndpointRecord`s. Served synchronously from
 the in-memory index (call [KabooAgentRunner.hydrate](#hydrate) after a cold start).
+
+`createdById` carries the thread's owner (from the store record or
+[KabooAccessPolicy.ownerOf](../interfaces/KabooAccessPolicy.md#ownerof); empty string when unknown), so hosts can
+scope the list per caller. Note: CopilotKit's thread-list handler does not
+pass the caller subject down to the runner, so per-caller filtering itself
+still happens in the host (e.g. an `onResponse` filter comparing
+`createdById`).
 
 #### Returns
 
@@ -248,7 +256,7 @@ The thread records for CopilotKit's thread-list endpoint.
 
 > **run**(`request`): `Observable`\<`objectOutputType`\<\{ `rawEvent`: `ZodOptional`\<`ZodAny`\>; `timestamp`: `ZodOptional`\<`ZodNumber`\>; `type`: `ZodNativeEnum`\<*typeof* `EventType`\>; \}, `ZodTypeAny`, `"passthrough"`\>\>
 
-Defined in: [src/runner.ts:138](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L138)
+Defined in: [src/runner.ts:172](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L172)
 
 Run an agent for a thread, streaming its AG-UI events. The thread's
 persisted state is injected into `input.state` first; on completion the run's
@@ -279,7 +287,7 @@ An observable of the run's events (also mirrored to `connect`).
 
 > **stop**(`request`): `Promise`\<`boolean` \| `undefined`\>
 
-Defined in: [src/runner.ts:264](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L264)
+Defined in: [src/runner.ts:299](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L299)
 
 Request cancellation of a thread's in-flight run by aborting its agent.
 

@@ -6,6 +6,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0]
+
+### Added
+
+- **Thread ownership.** `StoredThread` gains `ownerId`; the Postgres store adds
+  an additive `owner_id` column (`ADD COLUMN IF NOT EXISTS`, no migration step)
+  written on upsert and preserved when later runs pass no owner.
+- `ThreadStore.appendEvents` accepts an optional trailing `ownerId` and
+  `listThreads({ ownerId })` scopes the list to one subject (both stores).
+- `KabooRunnerOptions.accessPolicy` — `ownerOf(threadId)` resolves the owning
+  subject (recorded on persist, surfaced as `createdById` in
+  `runner.listThreads()` instead of the previous hard-coded `""`), and
+  `allowClearAll: false` makes `clearThreads()` throw instead of wiping the
+  store.
+- New [Access control](https://gl-pgege.github.io/kaboo-runtime/access-control/)
+  docs page covering the pattern and its honest limits (CopilotKit's list
+  handler never passes the caller subject, so per-caller filtering stays in the
+  host).
+
 ## [0.1.1]
 
 ### Fixed

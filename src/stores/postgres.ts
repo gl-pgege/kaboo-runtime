@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import type { BaseEvent, Message } from "@ag-ui/client";
-import type { StoredThread, ThreadStore } from "../store";
+import type { ListThreadsFilter, StoredThread, ThreadStore } from "../store";
 import { deriveState } from "../state";
 
 /**
@@ -62,6 +62,7 @@ export class PostgresThreadStore implements ThreadStore {
             created_at bigint NOT NULL,
             updated_at bigint NOT NULL
           );
+          ALTER TABLE kaboo_threads ADD COLUMN IF NOT EXISTS owner_id text;
           CREATE TABLE IF NOT EXISTS kaboo_thread_events (
             seq bigserial PRIMARY KEY,
             thread_id text NOT NULL,
@@ -81,18 +82,27 @@ export class PostgresThreadStore implements ThreadStore {
     return pool;
   }
 
-  async appendEvents(threadId: string, agentId: string, events: BaseEvent[]): Promise<void> {
+  async appendEvents(
+    threadId: string,
+    agentId: string,
+    events: BaseEvent[],
+    ownerId?: string | null,
+  ): Promise<void> {
     if (events.length === 0) return;
     const pool = await this.ensureReady();
     const now = Date.now();
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
+      // COALESCE keeps a previously recorded owner when this run passes none.
       await client.query(
-        `INSERT INTO kaboo_threads (id, agent_id, created_at, updated_at)
-         VALUES ($1, $2, $3, $3)
-         ON CONFLICT (id) DO UPDATE SET agent_id = EXCLUDED.agent_id, updated_at = EXCLUDED.updated_at`,
-        [threadId, agentId, now],
+        `INSERT INTO kaboo_threads (id, agent_id, created_at, updated_at, owner_id)
+         VALUES ($1, $2, $3, $3, $4)
+         ON CONFLICT (id) DO UPDATE SET
+           agent_id = EXCLUDED.agent_id,
+           updated_at = EXCLUDED.updated_at,
+           owner_id = COALESCE(EXCLUDED.owner_id, kaboo_threads.owner_id)`,
+        [threadId, agentId, now, ownerId ?? null],
       );
       for (const event of events) {
         await client.query(
@@ -141,14 +151,27 @@ export class PostgresThreadStore implements ThreadStore {
     return rows[0]?.messages ?? [];
   }
 
-  async listThreads(): Promise<StoredThread[]> {
+  async listThreads(filter?: ListThreadsFilter): Promise<StoredThread[]> {
     const pool = await this.ensureReady();
-    const { rows } = await pool.query<{ id: string; agent_id: string; created_at: string; updated_at: string }>(
-      `SELECT id, agent_id, created_at, updated_at FROM kaboo_threads ORDER BY updated_at DESC`,
+    const scoped = filter?.ownerId !== undefined;
+    const { rows } = await pool.query<{
+      id: string;
+      agent_id: string;
+      owner_id: string | null;
+      created_at: string;
+      updated_at: string;
+    }>(
+      scoped
+        ? `SELECT id, agent_id, owner_id, created_at, updated_at FROM kaboo_threads
+           WHERE owner_id = $1 ORDER BY updated_at DESC`
+        : `SELECT id, agent_id, owner_id, created_at, updated_at FROM kaboo_threads
+           ORDER BY updated_at DESC`,
+      scoped ? [filter.ownerId] : [],
     );
     return rows.map((r) => ({
       id: r.id,
       agentId: r.agent_id,
+      ownerId: r.owner_id,
       createdAt: Number(r.created_at),
       updatedAt: Number(r.updated_at),
     }));

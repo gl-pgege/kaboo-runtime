@@ -24,7 +24,7 @@ Id of the agent that produced the thread's most recent run.
 
 > **createdAt**: `number`
 
-Defined in: [src/store.ts:10](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L10)
+Defined in: [src/store.ts:12](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L12)
 
 Creation time, epoch milliseconds.
 
@@ -40,10 +40,20 @@ Unique thread id (the CopilotKit `threadId`).
 
 ***
 
+### ownerId
+
+> **ownerId**: `string` \| `null`
+
+Defined in: [src/store.ts:10](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L10)
+
+Owning subject (user id) recorded for the thread, or `null` when unknown.
+
+***
+
 ### updatedAt
 
 > **updatedAt**: `number`
 
-Defined in: [src/store.ts:12](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L12)
+Defined in: [src/store.ts:14](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L14)
 
 Last-updated time, epoch milliseconds (bumped on every persisted run).

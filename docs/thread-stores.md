@@ -10,12 +10,12 @@ Every store implements seven methods:
 
 | Method | Purpose |
 | --- | --- |
-| `appendEvents(threadId, agentId, events)` | Append a completed run's events, in order. |
+| `appendEvents(threadId, agentId, events, ownerId?)` | Append a completed run's events, in order. `ownerId` records the owning subject; nullish preserves an existing owner. |
 | `readEvents(threadId)` | Read the full event log, verbatim and in order. |
 | `readState(threadId)` | Latest state from the last `STATE_SNAPSHOT`, or `null`. |
 | `saveMessages(threadId, messages)` | Persist the derived message snapshot. |
 | `readMessages(threadId)` | Read the derived message snapshot. |
-| `listThreads()` | Every thread, most recently updated first. |
+| `listThreads(filter?)` | Threads, most recently updated first; `{ ownerId }` scopes to one subject. |
 | `clear(threadId?)` | Delete one thread, or all when omitted. |
 
 Events are stored **verbatim** — there is no compaction — so `ACTIVITY_SNAPSHOT`
@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS kaboo_threads (
   created_at bigint NOT NULL,
   updated_at bigint NOT NULL
 );
+ALTER TABLE kaboo_threads ADD COLUMN IF NOT EXISTS owner_id text;
 CREATE TABLE IF NOT EXISTS kaboo_thread_events (
   seq bigserial PRIMARY KEY,
   thread_id text NOT NULL,
@@ -70,6 +71,11 @@ CREATE TABLE IF NOT EXISTS kaboo_thread_messages (
   updated_at bigint NOT NULL
 );
 ```
+
+The `owner_id` column is added with `ADD COLUMN IF NOT EXISTS`, so upgrading an
+existing deployment needs no migration step — threads persisted before the
+upgrade simply have a `NULL` owner until their next run records one. See
+[Access control](access-control.md) for how owners are recorded and used.
 
 ### `dsn` vs `pool`
 

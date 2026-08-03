@@ -12,14 +12,42 @@ import type { AbstractAgent, BaseEvent, Message, RunAgentInput } from "@ag-ui/cl
 import type { ThreadStore } from "./store";
 import { deriveState } from "./state";
 
+/**
+ * Access-control hooks for {@link KabooAgentRunner}.
+ *
+ * kaboo-runtime ships no HTTP layer, so *authentication* stays in the host —
+ * but ownership is real data the runner records and serves. `ownerOf` tells
+ * the runner which subject owns a thread (typically parsed from the host's
+ * thread-id convention or session); the owner is persisted on the thread
+ * record and surfaced as `createdById` in {@link KabooAgentRunner.listThreads},
+ * so host request filters can compare against a real field instead of
+ * re-deriving ownership.
+ */
+export interface KabooAccessPolicy {
+  /**
+   * Resolve the owning subject for a thread (or `null` when unknown). Called
+   * when a run persists and when listing threads that have no recorded owner.
+   */
+  ownerOf?: (threadId: string) => string | null;
+  /**
+   * Whether {@link KabooAgentRunner.clearThreads} (which wipes the whole
+   * store) is allowed. Defaults to `true` for compatibility; multi-tenant
+   * hosts should set `false`.
+   */
+  allowClearAll?: boolean;
+}
+
 /** Options for {@link KabooAgentRunner} / {@link createKabooRunner}. */
 export interface KabooRunnerOptions {
   /** Called when a store write fails, so hosts can log/observe. */
   onStoreError?: (error: unknown, context: { threadId: string; op: string }) => void;
+  /** Ownership hooks — see {@link KabooAccessPolicy}. */
+  accessPolicy?: KabooAccessPolicy;
 }
 
 interface ThreadRuntime {
   agentId: string;
+  ownerId: string | null;
   events: BaseEvent[];
   messages: Message[];
   running: boolean;
@@ -82,6 +110,7 @@ export class KabooAgentRunner extends AgentRunner {
       const record = this.getOrCreate(t.id, t.agentId);
       record.createdAt = t.createdAt;
       record.updatedAt = t.updatedAt;
+      record.ownerId = t.ownerId ?? record.ownerId;
       await this.hydrateThread(t.id);
     }
   }
@@ -92,6 +121,7 @@ export class KabooAgentRunner extends AgentRunner {
       const now = Date.now();
       record = {
         agentId,
+        ownerId: null,
         events: [],
         messages: [],
         running: false,
@@ -126,6 +156,10 @@ export class KabooAgentRunner extends AgentRunner {
     else console.error(`[kaboo-runtime] store ${op} failed for thread ${threadId}:`, error);
   }
 
+  private resolveOwner(threadId: string): string | null {
+    return this.options.accessPolicy?.ownerOf?.(threadId) ?? null;
+  }
+
   /**
    * Run an agent for a thread, streaming its AG-UI events. The thread's
    * persisted state is injected into `input.state` first; on completion the run's
@@ -145,6 +179,7 @@ export class KabooAgentRunner extends AgentRunner {
     record.stopRequested = false;
     record.agent = agent;
     record.agentId = agent.agentId ?? record.agentId;
+    record.ownerId = record.ownerId ?? this.resolveOwner(threadId);
 
     const runSubject = new ReplaySubject<BaseEvent>(Infinity);
     const live = new ReplaySubject<BaseEvent>(Infinity);
@@ -188,7 +223,7 @@ export class KabooAgentRunner extends AgentRunner {
         record.updatedAt = Date.now();
         record.hydrated = true;
         try {
-          await this.store.appendEvents(threadId, record.agentId, runEvents);
+          await this.store.appendEvents(threadId, record.agentId, runEvents, record.ownerId);
           await this.store.saveMessages(threadId, derivedMessages);
         } catch (error) {
           this.reportStoreError(error, threadId, "persist");
@@ -284,6 +319,13 @@ export class KabooAgentRunner extends AgentRunner {
    * first, as CopilotKit `LocalThreadEndpointRecord`s. Served synchronously from
    * the in-memory index (call {@link KabooAgentRunner.hydrate} after a cold start).
    *
+   * `createdById` carries the thread's owner (from the store record or
+   * {@link KabooAccessPolicy.ownerOf}; empty string when unknown), so hosts can
+   * scope the list per caller. Note: CopilotKit's thread-list handler does not
+   * pass the caller subject down to the runner, so per-caller filtering itself
+   * still happens in the host (e.g. an `onResponse` filter comparing
+   * `createdById`).
+   *
    * @returns The thread records for CopilotKit's thread-list endpoint.
    */
   listThreads(): LocalThreadEndpointRecord[] {
@@ -294,7 +336,7 @@ export class KabooAgentRunner extends AgentRunner {
         name: null,
         agentId: r.agentId,
         organizationId: "",
-        createdById: "",
+        createdById: r.ownerId ?? this.resolveOwner(id) ?? "",
         archived: false,
         createdAt: new Date(r.createdAt).toISOString(),
         updatedAt: new Date(r.updatedAt).toISOString(),
@@ -335,9 +377,13 @@ export class KabooAgentRunner extends AgentRunner {
 
   /**
    * Clear the in-memory index and the backing store (all threads). Store errors
-   * are routed to {@link KabooRunnerOptions.onStoreError}.
+   * are routed to {@link KabooRunnerOptions.onStoreError}. Throws when the
+   * access policy sets `allowClearAll: false`.
    */
   clearThreads(): void {
+    if (this.options.accessPolicy?.allowClearAll === false) {
+      throw new Error("clearThreads is disabled by the runner's access policy (allowClearAll: false)");
+    }
     this.cache.clear();
     void this.store.clear().catch((error) => this.reportStoreError(error, "*", "clear"));
   }

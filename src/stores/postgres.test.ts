@@ -61,4 +61,21 @@ describe.skipIf(!dsn)("PostgresThreadStore (DATABASE_URL)", () => {
     await store.clear(tid);
     expect(await store.readEvents(tid)).toEqual([]);
   });
+
+  it("records the owner, preserves it on nullish appends, and scopes the list", async () => {
+    const owned = `owned-${Date.now()}`;
+    const other = `other-${Date.now()}`;
+    await store.appendEvents(owned, "agentA", [event(EventType.RUN_STARTED)], "alice");
+    await store.appendEvents(owned, "agentA", [event(EventType.RUN_FINISHED)]);
+    await store.appendEvents(other, "agentA", [event(EventType.RUN_STARTED)], "bob");
+
+    const all = await store.listThreads();
+    expect(all.find((t) => t.id === owned)?.ownerId).toBe("alice");
+
+    const alices = await store.listThreads({ ownerId: "alice" });
+    expect(alices.map((t) => t.id)).toEqual([owned]);
+
+    await store.clear(owned);
+    await store.clear(other);
+  });
 });
