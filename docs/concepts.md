@@ -50,6 +50,13 @@ which is why an approval now survives a workflows restart instead of failing wit
 For the full detail (including `hydrate()` after a cold start), see
 [Replay & state](replay-and-state.md).
 
+## The other direction: props the server sends in
+
+State flows from the store into each run automatically. Context only the server
+can vouch for — a run-scoped token, the tenant, or the workflow config a run
+should execute — is stamped onto `forwardedProps` by wrapping the runner. See
+[Server-side props](server-side-props.md).
+
 ## Where it sits in the stack
 
 kaboo-runtime is the persistence/orchestration layer of the

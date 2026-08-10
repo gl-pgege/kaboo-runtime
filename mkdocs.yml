@@ -40,6 +40,7 @@ nav:
   - Custom store: custom-store.md
   - Access control: access-control.md
   - Replay & state: replay-and-state.md
+  - Server-side props: server-side-props.md
   - Integrations:
       - NestJS: integrations/nestjs.md
       - Express: integrations/express.md

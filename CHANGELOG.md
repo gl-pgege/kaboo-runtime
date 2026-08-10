@@ -4,7 +4,15 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
 ## [0.2.1]
+
+### Added
+
+- **"Server-side forwarded props" guide** — where to stamp the props only the
+  server can vouch for (a run's workflow config, a scoped token, the tenant) by
+  wrapping the runner, and why conversation state does not belong there.
 
 ### Fixed
 

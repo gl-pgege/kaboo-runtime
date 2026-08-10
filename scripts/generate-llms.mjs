@@ -28,11 +28,15 @@ const SUMMARY =
 const NAV = [
   { title: "Home", path: "docs/index.md", url: PAGES },
   { title: "Getting started", path: "docs/getting-started.md", url: `${PAGES}getting-started/` },
+  { title: "Concepts", path: "docs/concepts.md", url: `${PAGES}concepts/` },
   { title: "Thread stores", path: "docs/thread-stores.md", url: `${PAGES}thread-stores/` },
   { title: "Custom store", path: "docs/custom-store.md", url: `${PAGES}custom-store/` },
+  { title: "Access control", path: "docs/access-control.md", url: `${PAGES}access-control/` },
   { title: "Replay & state", path: "docs/replay-and-state.md", url: `${PAGES}replay-and-state/` },
+  { title: "Server-side props", path: "docs/server-side-props.md", url: `${PAGES}server-side-props/` },
   { title: "NestJS integration", path: "docs/integrations/nestjs.md", url: `${PAGES}integrations/nestjs/` },
   { title: "Express integration", path: "docs/integrations/express.md", url: `${PAGES}integrations/express/` },
+  { title: "Troubleshooting", path: "docs/troubleshooting.md", url: `${PAGES}troubleshooting/` },
   { title: "API inventory", path: "docs/api-inventory.md", url: `${PAGES}api-inventory/` },
 ];
 

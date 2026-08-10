@@ -8,11 +8,15 @@ kaboo-runtime drops a custom AgentRunner into a CopilotKit runtime that records 
 
 - [Home](https://gl-pgege.github.io/kaboo-runtime/)
 - [Getting started](https://gl-pgege.github.io/kaboo-runtime/getting-started/)
+- [Concepts](https://gl-pgege.github.io/kaboo-runtime/concepts/)
 - [Thread stores](https://gl-pgege.github.io/kaboo-runtime/thread-stores/)
 - [Custom store](https://gl-pgege.github.io/kaboo-runtime/custom-store/)
+- [Access control](https://gl-pgege.github.io/kaboo-runtime/access-control/)
 - [Replay & state](https://gl-pgege.github.io/kaboo-runtime/replay-and-state/)
+- [Server-side props](https://gl-pgege.github.io/kaboo-runtime/server-side-props/)
 - [NestJS integration](https://gl-pgege.github.io/kaboo-runtime/integrations/nestjs/)
 - [Express integration](https://gl-pgege.github.io/kaboo-runtime/integrations/express/)
+- [Troubleshooting](https://gl-pgege.github.io/kaboo-runtime/troubleshooting/)
 - [API inventory](https://gl-pgege.github.io/kaboo-runtime/api-inventory/)
 
 ## API
