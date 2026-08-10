@@ -65,11 +65,12 @@ interface ThreadRuntime {
  * into `new CopilotRuntime({ agents, runner })` — it ships no HTTP layer, so it
  * works under any framework the host already mounts CopilotKit with.
  *
- * On each run it injects the thread's persisted state (including kaboo-workflows'
- * `kaboo_history`) into `input.state`, so multi-agent history is seeded from the
- * store rather than the browser. Unlike the stock in-memory runner, events are
- * NOT compacted, so `ACTIVITY_SNAPSHOT` / `CUSTOM` events survive for a full UI
- * replay.
+ * On each run it injects the thread's persisted state into the run, so anything
+ * kaboo-workflows keeps there is seeded from the store rather than the browser:
+ * `kaboo_history` for multi-agent transcripts, and `kaboo_session` for pending
+ * interrupts — which is what lets an approval survive a restart of the agent
+ * service. Unlike the stock in-memory runner, events are NOT compacted, so
+ * `ACTIVITY_SNAPSHOT` / `CUSTOM` events survive for a full UI replay.
  *
  * @example
  * ```ts
@@ -145,10 +146,27 @@ export class KabooAgentRunner extends AgentRunner {
     record.hydrated = true;
   }
 
-  private injectState(input: RunAgentInput, persisted: Record<string, unknown> | null): RunAgentInput {
+  /**
+   * Merge the thread's persisted state under the caller's for this run.
+   *
+   * The merged state is written back onto the *agent*, not just the returned
+   * input. `AbstractAgent.prepareRunAgentInput` builds the wire payload from
+   * `this.state` and ignores `input.state` entirely, so setting the field alone
+   * is silently dropped — which used to make this whole injection a no-op, and
+   * left every host to replay state itself.
+   */
+  private injectState(
+    agent: AbstractAgent,
+    input: RunAgentInput,
+    persisted: Record<string, unknown> | null,
+  ): RunAgentInput {
     if (!persisted) return input;
     const inputState = input.state && typeof input.state === "object" ? input.state : {};
-    return { ...input, state: { ...persisted, ...(inputState as Record<string, unknown>) } };
+    const merged = { ...persisted, ...(inputState as Record<string, unknown>) };
+    // Guarded because the runner accepts whatever CopilotKit hands it, which may
+    // be a duck-typed agent that reads `input.state` instead.
+    if (typeof agent.setState === "function") agent.setState(merged);
+    return { ...input, state: merged };
   }
 
   private reportStoreError(error: unknown, threadId: string, op: string): void {
@@ -196,7 +214,7 @@ export class KabooAgentRunner extends AgentRunner {
       try {
         await this.hydrateThread(threadId);
         const persisted = await this.store.readState(threadId);
-        const mergedInput = this.injectState(input, persisted);
+        const mergedInput = this.injectState(agent, input, persisted);
         await agent.runAgent(mergedInput, {
           onEvent: ({ event }: { event: BaseEvent }) => {
             runEvents.push(event);

@@ -27,13 +27,27 @@ const state = deriveState(events); // Record<string, unknown> | null
 The built-in stores use `deriveState` for `readState`, and so should custom
 stores, so behavior is identical everywhere.
 
-## `kaboo_history` injection
+## State replay is a guarantee, not a convention
 
-kaboo-workflows folds each turn's `kaboo_history` into its trailing
-`STATE_SNAPSHOT`. Before every run, `KabooAgentRunner` reads the thread's
-persisted state and merges it into `input.state` (persisted values first, then
-any incoming state), so multi-agent history is seeded from the server rather than
-the browser. The client no longer has to carry conversation history.
+kaboo-workflows folds what a turn accumulates into its trailing `STATE_SNAPSHOT`.
+Before every run, `KabooAgentRunner` reads the thread's persisted state and sets
+it on the agent as `input.state` (persisted values first, then any incoming state,
+so an explicit caller value wins). Every app on the runtime therefore gets the
+round-trip without writing any code for it.
+
+Two things ride that channel today:
+
+- **`kaboo_history`** — sub-agent transcripts, so multi-agent history is seeded
+  from the server rather than the browser.
+- **`kaboo_session`** — a pending human-in-the-loop interrupt. This is what makes
+  an approval durable: the open gate is restored onto whichever agent serves the
+  resume, so a workflows restart, a second replica, or a rebuilt session between
+  the question and the answer no longer strands it with
+  `No agent session found for resume`.
+
+Because a paused approval now depends on this, persisting `STATE_SNAPSHOT` is a
+requirement of a store rather than a nicety — see [thread stores](thread-stores.md)
+and [custom store](custom-store.md).
 
 ## Replay on reconnect
 

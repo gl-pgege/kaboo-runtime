@@ -9,9 +9,16 @@ class FakeAgent {
   agentId = "test";
   messages: Message[] = [];
   lastInput: RunAgentInput | null = null;
+  // The real AbstractAgent sends `this.state`, not `input.state`, so the double
+  // has to model both to be worth anything.
+  state: Record<string, unknown> = {};
 
   constructor(private readonly events: BaseEvent[], messages: Message[] = []) {
     this.messages = messages;
+  }
+
+  setState(state: Record<string, unknown>) {
+    this.state = state;
   }
 
   async runAgent(input: RunAgentInput, subscriber?: { onEvent?: (p: { event: BaseEvent }) => void }) {
@@ -168,7 +175,70 @@ describe("KabooAgentRunner", () => {
     expect((secondAgent.lastInput?.state as Record<string, unknown>).kaboo_history).toEqual({
       worker: [{ x: 1 }],
     });
+    // What actually goes on the wire: AbstractAgent builds its payload from the
+    // agent's own state and ignores input.state, so the merge has to land here.
+    expect(secondAgent.state.kaboo_history).toEqual({ worker: [{ x: 1 }] });
     expect(runner.getThreadState("t1")).toEqual({ kaboo_history: { worker: [{ x: 1 }] } });
+  });
+
+  it("replays a pending interrupt so an approval survives an agent restart", async () => {
+    const store = new InMemoryThreadStore();
+    const runner = new KabooAgentRunner(store);
+
+    const paused = {
+      interrupt_state: {
+        interrupts: { "int-1": { id: "int-1", reason: "approve payment" } },
+        context: {},
+        activated: true,
+      },
+    };
+    await collect(
+      runner.run(
+        runReq(
+          "t1",
+          new FakeAgent([
+            { type: EventType.RUN_STARTED, threadId: "t1", runId: "r1" } as BaseEvent,
+            {
+              type: EventType.STATE_SNAPSHOT,
+              snapshot: { kaboo_session: paused },
+            } as unknown as BaseEvent,
+            { type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1" } as BaseEvent,
+          ]),
+          input(),
+        ),
+      ),
+    );
+
+    // A fresh agent, as after a restart of the agent service: it knows nothing
+    // about the gate, so the runner has to hand it back.
+    const resumed = new FakeAgent([
+      { type: EventType.RUN_STARTED, threadId: "t1", runId: "r2" } as BaseEvent,
+      { type: EventType.RUN_FINISHED, threadId: "t1", runId: "r2" } as BaseEvent,
+    ]);
+    await collect(runner.run(runReq("t1", resumed, input({ runId: "r2" }))));
+
+    expect(resumed.state.kaboo_session).toEqual(paused);
+  });
+
+  it("lets the caller's state win over the persisted copy", async () => {
+    const store = new InMemoryThreadStore();
+    const runner = new KabooAgentRunner(store);
+    await collect(
+      runner.run(
+        runReq(
+          "t1",
+          new FakeAgent([
+            { type: EventType.STATE_SNAPSHOT, snapshot: { seat: "stored", keep: 1 } } as unknown as BaseEvent,
+          ]),
+          input(),
+        ),
+      ),
+    );
+
+    const next = new FakeAgent([]);
+    await collect(runner.run(runReq("t1", next, input({ state: { seat: "caller" } }))));
+
+    expect(next.state).toEqual({ seat: "caller", keep: 1 });
   });
 
   it("reports running state and refuses concurrent runs", async () => {

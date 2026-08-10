@@ -21,6 +21,11 @@ Every store implements seven methods:
 Events are stored **verbatim** — there is no compaction — so `ACTIVITY_SNAPSHOT`
 and `CUSTOM` events survive the round-trip and the full UI can be replayed.
 
+`readState` is load-bearing rather than informational. It is replayed into the
+next run ([Replay & state](replay-and-state.md)), and a pending human-in-the-loop
+approval travels on it. A store that drops state snapshots does not just lose
+context — it strands approvals across a restart.
+
 ## InMemoryThreadStore
 
 Keeps everything in a `Map` for the life of the process. Ideal for local

@@ -36,12 +36,16 @@ in flight it emits the stored prior turns and then forwards live events. That is
 what lets a browser reload — or a second tab — rebuild the full transcript and
 keep watching live work.
 
-## Server-owned history
+## Server-owned history and durable approvals
 
-kaboo-workflows folds each turn's `kaboo_history` into its trailing
-`STATE_SNAPSHOT`. Before every run, `KabooAgentRunner` reads the thread's
-persisted state and merges it into `input.state`, so multi-agent history is
-seeded from the server — the browser no longer carries conversation history.
+kaboo-workflows folds what a turn accumulates into its trailing `STATE_SNAPSHOT`.
+Before every run, `KabooAgentRunner` reads the thread's persisted state and sets it
+on the agent as `input.state`, so multi-agent history (`kaboo_history`) is seeded
+from the server — the browser no longer carries conversation history.
+
+The same channel carries a pending human-in-the-loop approval (`kaboo_session`),
+which is why an approval now survives a workflows restart instead of failing with
+`No agent session found for resume`.
 
 For the full detail (including `hydrate()` after a cold start), see
 [Replay & state](replay-and-state.md).

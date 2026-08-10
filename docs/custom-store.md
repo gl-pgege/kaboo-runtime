@@ -10,7 +10,9 @@ methods.
   compact events — the full UI is reconstructed from them.
 - **Derive state, don't invent it.** `readState` should return the last
   `STATE_SNAPSHOT`; use the exported `deriveState` helper so behavior matches the
-  built-in stores.
+  built-in stores. This one is not optional: the state you return is replayed into
+  the next run, and it carries pending human-in-the-loop approvals, so a store
+  that loses it loses approvals across a restart.
 - **`listThreads` is most-recent-first.**
 - **`clear(id?)`** deletes one thread when given an id, or all threads when
   omitted.
