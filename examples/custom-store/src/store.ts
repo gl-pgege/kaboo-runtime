@@ -21,6 +21,10 @@ interface Row {
  * A minimal ThreadStore that persists every thread to a single JSON file.
  * Demonstrates the extension point — events are stored verbatim and state is
  * derived with `deriveState`. Not tuned for concurrency or scale.
+ *
+ * `readState` is load-bearing rather than optional: the runner replays what it
+ * returns into the next run, which is how a paused human-in-the-loop approval
+ * (`kaboo_session`) survives the agent process restarting.
  */
 export class JsonFileThreadStore implements ThreadStore {
   private readonly data: Record<string, Row>;
