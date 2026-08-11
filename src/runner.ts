@@ -1,4 +1,4 @@
-import { Observable, ReplaySubject } from "rxjs";
+import { Observable, Subject, type Subscription } from "rxjs";
 import {
   AgentRunner,
   finalizeRunEvents,
@@ -8,9 +8,183 @@ import {
   type AgentRunnerStopRequest,
   type LocalThreadEndpointRecord,
 } from "@copilotkit/runtime/v2";
-import type { AbstractAgent, BaseEvent, Message, RunAgentInput } from "@ag-ui/client";
+import { EventType, type AbstractAgent, type BaseEvent, type Message, type RunAgentInput } from "@ag-ui/client";
 import type { ThreadStore } from "./store";
-import { deriveState } from "./state";
+
+/**
+ * Name of the `CUSTOM` event the runner emits (and persists) once per new
+ * input message of a run, carrying `{ messageId, role, createdAt, references }`.
+ * Because events are persisted verbatim and replayed on reconnect, this is the
+ * durable channel for message timestamps and per-message references — the
+ * derived `Message` snapshot cannot be relied on to round-trip extra fields.
+ */
+export const MESSAGE_META_EVENT = "kaboo.message_meta";
+
+/** Payload of a {@link MESSAGE_META_EVENT} `CUSTOM` event. */
+export interface MessageMeta {
+  /** Id of the input message this metadata describes. */
+  messageId: string;
+  /** Role of that message (currently always `"user"`). */
+  role: string;
+  /** Wall-clock time the run accepted the message, epoch milliseconds. */
+  createdAt: number;
+  /**
+   * The `state.kaboo_references` the message was sent with, attached to the
+   * newest user message of the run. Absent when none were staged.
+   */
+  references?: unknown[];
+}
+
+/**
+ * Build one {@link MESSAGE_META_EVENT} per input message not seen in a prior
+ * run (i.e. the messages this run adds), stamping them with the current time.
+ * References ride only the newest user message — that is the message the
+ * composer staged them for.
+ */
+function buildMessageMetaEvents(input: RunAgentInput, known: Message[]): BaseEvent[] {
+  const knownIds = new Set(known.map((m) => m.id));
+  const fresh = (input.messages ?? []).filter(
+    (m) => m.role === "user" && typeof m.id === "string" && m.id.length > 0 && !knownIds.has(m.id),
+  );
+  if (fresh.length === 0) return [];
+  const state = input.state as Record<string, unknown> | null | undefined;
+  const references =
+    state && Array.isArray(state.kaboo_references) && state.kaboo_references.length > 0
+      ? state.kaboo_references
+      : undefined;
+  const now = Date.now();
+  return fresh.map((m, i) => {
+    const value: MessageMeta = { messageId: m.id, role: m.role, createdAt: now };
+    if (references && i === fresh.length - 1) value.references = references;
+    return { type: EventType.CUSTOM, name: MESSAGE_META_EVENT, value, timestamp: now } as BaseEvent;
+  });
+}
+
+/**
+ * Event types `finalizeRunEvents` inspects to close dangling messages, tool
+ * calls, and runs. Only these need to be tracked while a run streams — which
+ * is what lets the runner stop retaining the full run in memory.
+ */
+const LIFECYCLE_TYPES: ReadonlySet<EventType> = new Set([
+  EventType.TEXT_MESSAGE_START,
+  EventType.TEXT_MESSAGE_END,
+  EventType.TOOL_CALL_START,
+  EventType.TOOL_CALL_END,
+  EventType.TOOL_CALL_RESULT,
+  EventType.RUN_FINISHED,
+  EventType.RUN_ERROR,
+]);
+
+/**
+ * Reduce an event to the fields `finalizeRunEvents` reads (`type`,
+ * `messageId`, `toolCallId`), so tracking a run's lifecycle costs a few bytes
+ * per event instead of retaining snapshot payloads.
+ */
+function lifecycleShadow(event: BaseEvent): BaseEvent {
+  const e = event as BaseEvent & { messageId?: unknown; toolCallId?: unknown };
+  return { type: event.type, messageId: e.messageId, toolCallId: e.toolCallId } as BaseEvent;
+}
+
+/**
+ * Write-behind persistence for one in-flight run.
+ *
+ * Events are appended to {@link RunPersistence.unpersisted} and flushed to the
+ * store in batches as fast as the store accepts them; a batch is dropped from
+ * memory the moment its transaction commits. This bounds the runner's memory
+ * to the flush lag instead of the whole run (a multi-hour agent run can emit
+ * gigabytes of snapshot events), and it makes the log durable as the run
+ * progresses — a crash loses at most the in-flight batch, not the entire run.
+ *
+ * {@link RunPersistence.pause} freezes flushing so a reader can take a
+ * consistent split: everything committed is in the store, everything else is
+ * in `unpersisted`. That is what makes a mid-run `connect` gap-free.
+ */
+class RunPersistence {
+  /** Events accepted but not yet committed to the store, in order. */
+  readonly unpersisted: BaseEvent[] = [];
+  /** Live feed of every accepted event, for mid-run subscribers. */
+  readonly live = new Subject<BaseEvent>();
+
+  private flushing = false;
+  private pauses = 0;
+  private lastFlushFailed = false;
+  private inFlight: Promise<void> = Promise.resolve();
+  private resumeWaiters: (() => void)[] = [];
+
+  constructor(
+    private readonly flushBatch: (events: BaseEvent[]) => Promise<void>,
+    private readonly onError: (error: unknown) => void,
+  ) {}
+
+  /** Record an event: buffer it, feed live subscribers, schedule a flush. */
+  accept(event: BaseEvent): void {
+    this.unpersisted.push(event);
+    this.live.next(event);
+    this.schedule();
+  }
+
+  private schedule(): void {
+    if (this.flushing || this.pauses > 0 || this.unpersisted.length === 0) return;
+    this.flushing = true;
+    const batch = this.unpersisted.slice();
+    this.inFlight = this.flushBatch(batch).then(
+      () => {
+        // batch is always a prefix of unpersisted (events only append).
+        this.unpersisted.splice(0, batch.length);
+        this.lastFlushFailed = false;
+        this.flushing = false;
+        this.schedule();
+      },
+      (error) => {
+        this.lastFlushFailed = true;
+        this.flushing = false;
+        this.onError(error);
+        // No immediate retry (avoids a hot loop against a down store);
+        // the next accept() or drain() retries with a larger batch.
+      },
+    );
+  }
+
+  /**
+   * Pause flushing and wait out any in-flight write. Afterwards the store and
+   * `unpersisted` form a consistent, non-overlapping split of the run's events
+   * until {@link RunPersistence.resume} is called.
+   */
+  async pause(): Promise<void> {
+    this.pauses += 1;
+    await this.inFlight.catch(() => {});
+  }
+
+  /** Undo one {@link RunPersistence.pause}; resumes flushing at zero. */
+  resume(): void {
+    this.pauses -= 1;
+    if (this.pauses === 0) {
+      for (const waiter of this.resumeWaiters.splice(0)) waiter();
+      this.schedule();
+    }
+  }
+
+  /**
+   * Flush everything left (used at run end). Resolves once the log is durable,
+   * or after a failed write (already routed to `onError`).
+   */
+  async drain(): Promise<void> {
+    while (this.unpersisted.length > 0) {
+      if (this.pauses > 0) {
+        await new Promise<void>((resolve) => this.resumeWaiters.push(resolve));
+        continue;
+      }
+      this.schedule();
+      await this.inFlight.catch(() => {});
+      if (this.lastFlushFailed) return;
+    }
+  }
+
+  /** Complete the live feed (run is over). */
+  complete(): void {
+    this.live.complete();
+  }
+}
 
 /**
  * Access-control hooks for {@link KabooAgentRunner}.
@@ -48,11 +222,14 @@ export interface KabooRunnerOptions {
 interface ThreadRuntime {
   agentId: string;
   ownerId: string | null;
-  events: BaseEvent[];
+  /** Whether the thread has any persisted or in-flight events. */
+  hasEvents: boolean;
+  /** Latest `STATE_SNAPSHOT` payload, folded incrementally as runs stream. */
+  state: Record<string, unknown> | null;
   messages: Message[];
   running: boolean;
   stopRequested: boolean;
-  live: ReplaySubject<BaseEvent> | null;
+  run: RunPersistence | null;
   agent: AbstractAgent | null;
   createdAt: number;
   updatedAt: number;
@@ -64,6 +241,14 @@ interface ThreadRuntime {
  * pluggable {@link ThreadStore} and replays it verbatim on reconnect. Drop it
  * into `new CopilotRuntime({ agents, runner })` — it ships no HTTP layer, so it
  * works under any framework the host already mounts CopilotKit with.
+ *
+ * Events are persisted *incrementally* while a run streams (write-behind
+ * batches) and dropped from memory once committed, so memory stays bounded on
+ * long, snapshot-heavy runs and a crash preserves the log up to the last
+ * committed batch. On replay of a thread whose final run has no terminal event
+ * (e.g. the host crashed mid-run), the runner synthesizes the missing
+ * `TEXT_MESSAGE_END` / `TOOL_CALL_*` / `RUN_ERROR` events so clients never
+ * hang on a dangling run.
  *
  * On each run it injects the thread's persisted state into the run, so anything
  * kaboo-workflows keeps there is seeded from the store rather than the browser:
@@ -88,6 +273,7 @@ export class KabooAgentRunner extends AgentRunner {
   readonly ɵsupportsLocalThreadEndpoints = true;
 
   private readonly cache = new Map<string, ThreadRuntime>();
+  private readonly sealing = new Set<string>();
 
   /**
    * @param store - Where to persist and read each thread's event log.
@@ -102,8 +288,9 @@ export class KabooAgentRunner extends AgentRunner {
 
   /**
    * Warm the in-memory index from the store so the synchronous thread-query
-   * methods (`listThreads`, `getThreadEvents`, ...) work after a cold start.
-   * Optional: `run`/`connect` also hydrate their own thread lazily.
+   * methods (`listThreads`, `getThreadMessages`, ...) work after a cold start.
+   * Loads each thread's metadata, message snapshot, and latest state — not its
+   * event log. Optional: `run`/`connect` also hydrate their own thread lazily.
    */
   async hydrate(): Promise<void> {
     const threads = await this.store.listThreads();
@@ -112,6 +299,7 @@ export class KabooAgentRunner extends AgentRunner {
       record.createdAt = t.createdAt;
       record.updatedAt = t.updatedAt;
       record.ownerId = t.ownerId ?? record.ownerId;
+      record.hasEvents = true;
       await this.hydrateThread(t.id);
     }
   }
@@ -123,11 +311,12 @@ export class KabooAgentRunner extends AgentRunner {
       record = {
         agentId,
         ownerId: null,
-        events: [],
+        hasEvents: false,
+        state: null,
         messages: [],
         running: false,
         stopRequested: false,
-        live: null,
+        run: null,
         agent: null,
         createdAt: now,
         updatedAt: now,
@@ -141,8 +330,8 @@ export class KabooAgentRunner extends AgentRunner {
   private async hydrateThread(threadId: string): Promise<void> {
     const record = this.getOrCreate(threadId);
     if (record.hydrated) return;
-    record.events = await this.store.readEvents(threadId);
     record.messages = await this.store.readMessages(threadId);
+    record.state = await this.store.readState(threadId);
     record.hydrated = true;
   }
 
@@ -180,9 +369,10 @@ export class KabooAgentRunner extends AgentRunner {
 
   /**
    * Run an agent for a thread, streaming its AG-UI events. The thread's
-   * persisted state is injected into `input.state` first; on completion the run's
-   * events and derived messages are persisted to the store. Throws if the thread
-   * is already running.
+   * persisted state is injected into `input.state` first. Events are persisted
+   * incrementally as the run streams (and dropped from memory once committed);
+   * the derived message snapshot is persisted on completion. Throws if the
+   * thread is already running.
    *
    * @param request - The CopilotKit run request (`threadId`, `agent`, `input`).
    * @returns An observable of the run's events (also mirrored to `connect`).
@@ -199,49 +389,90 @@ export class KabooAgentRunner extends AgentRunner {
     record.agentId = agent.agentId ?? record.agentId;
     record.ownerId = record.ownerId ?? this.resolveOwner(threadId);
 
-    const runSubject = new ReplaySubject<BaseEvent>(Infinity);
-    const live = new ReplaySubject<BaseEvent>(Infinity);
-    record.live = live;
+    const persistence = new RunPersistence(
+      (batch) => this.store.appendEvents(threadId, record.agentId, batch, record.ownerId),
+      (error) => this.reportStoreError(error, threadId, "persist"),
+    );
+    record.run = persistence;
 
-    const runEvents: BaseEvent[] = [];
-
+    // Output stream for CopilotKit's response writer: buffer only until the
+    // first subscriber attaches, then feed it directly. (A ReplaySubject here
+    // would retain the entire run in memory for its lifetime.)
+    let backlog: BaseEvent[] | null = [];
+    let completed = false;
+    const out = new Subject<BaseEvent>();
+    const output = new Observable<BaseEvent>((subscriber) => {
+      if (backlog) {
+        for (const event of backlog) subscriber.next(event);
+        backlog = null;
+      }
+      if (completed) {
+        subscriber.complete();
+        return;
+      }
+      const sub = out.subscribe(subscriber);
+      return () => sub.unsubscribe();
+    });
     const emit = (event: BaseEvent) => {
-      runSubject.next(event);
-      live.next(event);
+      if (backlog) backlog.push(event);
+      else out.next(event);
+    };
+
+    // Compact lifecycle shadow: everything finalizeRunEvents needs to close a
+    // run, without retaining the (potentially huge) events themselves.
+    const shadow: BaseEvent[] = [];
+    let finalizing = false;
+    const accept = (event: BaseEvent) => {
+      if (event.timestamp == null) event.timestamp = Date.now();
+      if (!finalizing && LIFECYCLE_TYPES.has(event.type)) shadow.push(lifecycleShadow(event));
+      if (event.type === EventType.STATE_SNAPSHOT) {
+        const snapshot = (event as { snapshot?: unknown }).snapshot;
+        if (snapshot && typeof snapshot === "object") record.state = snapshot as Record<string, unknown>;
+      }
+      record.hasEvents = true;
+      persistence.accept(event);
+      emit(event);
     };
 
     const runAgent = async () => {
       try {
         await this.hydrateThread(threadId);
-        const persisted = await this.store.readState(threadId);
+        const persisted = record.state ?? (await this.store.readState(threadId));
         const mergedInput = this.injectState(agent, input, persisted);
+        // Message-meta events trail the agent's first event (RUN_STARTED)
+        // rather than leading it: AG-UI clients validate that a run's stream
+        // opens with RUN_STARTED, so leading CUSTOM events would be rejected.
+        const metaEvents = buildMessageMetaEvents(mergedInput, record.messages);
+        let metaPending = metaEvents.length > 0;
         await agent.runAgent(mergedInput, {
           onEvent: ({ event }: { event: BaseEvent }) => {
-            runEvents.push(event);
-            emit(event);
+            accept(event);
+            if (metaPending) {
+              metaPending = false;
+              for (const meta of metaEvents) accept(meta);
+            }
           },
         });
-        // finalizeRunEvents mutates runEvents (appends any missing terminal
-        // events) and returns just the appended ones for us to emit.
-        for (const event of finalizeRunEvents(runEvents, { stopRequested: record.stopRequested })) {
-          emit(event);
+        finalizing = true;
+        for (const event of finalizeRunEvents(shadow, { stopRequested: record.stopRequested })) {
+          accept(event);
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        for (const event of finalizeRunEvents(runEvents, {
+        finalizing = true;
+        for (const event of finalizeRunEvents(shadow, {
           stopRequested: record.stopRequested,
           interruptionMessage: message,
         })) {
-          emit(event);
+          accept(event);
         }
       } finally {
-        record.events.push(...runEvents);
         const derivedMessages = Array.isArray(agent.messages) ? [...agent.messages] : record.messages;
         record.messages = derivedMessages;
         record.updatedAt = Date.now();
         record.hydrated = true;
+        await persistence.drain();
         try {
-          await this.store.appendEvents(threadId, record.agentId, runEvents, record.ownerId);
           await this.store.saveMessages(threadId, derivedMessages);
         } catch (error) {
           this.reportStoreError(error, threadId, "persist");
@@ -249,52 +480,109 @@ export class KabooAgentRunner extends AgentRunner {
         record.running = false;
         record.stopRequested = false;
         record.agent = null;
-        record.live = null;
-        runSubject.complete();
-        live.complete();
+        record.run = null;
+        completed = true;
+        persistence.complete();
+        out.complete();
       }
     };
 
     void runAgent();
-    return runSubject.asObservable();
+    return output;
   }
 
   /**
    * Replay a thread's stored event log, then tee any in-flight run so a
-   * reconnecting client sees prior turns followed by live events. Completes
-   * immediately (after replay) when nothing is running.
+   * reconnecting client sees prior turns followed by live events, without
+   * gaps or duplicates (flushing is paused while the split is taken).
+   *
+   * When the thread is idle but its log ends in a run with no terminal event —
+   * the host crashed mid-run — the missing `TEXT_MESSAGE_END` / `TOOL_CALL_*` /
+   * `RUN_ERROR` events are synthesized (and persisted, best-effort) so the
+   * client's stream closes cleanly instead of hanging. Completes immediately
+   * (after replay) when nothing is running.
    *
    * @param request - The connect request (`threadId`).
    * @returns An observable that emits the stored log and, if running, live events.
    */
   connect(request: AgentRunnerConnectRequest): Observable<BaseEvent> {
     const { threadId } = request;
-    const subject = new ReplaySubject<BaseEvent>(Infinity);
-    const record = this.cache.get(threadId);
-    // Capture the live stream up front: if a run is in flight its events are
-    // not yet in the store (they persist on completion), so we replay the
-    // stored prior turns and tee the in-flight run from the live subject.
-    const live = record?.running ? record.live : null;
-
-    void (async () => {
-      try {
-        const events = await this.store.readEvents(threadId);
-        for (const event of events) subject.next(event);
-        if (live) {
-          live.subscribe({
-            next: (event) => subject.next(event),
-            error: (error) => subject.error(error),
-            complete: () => subject.complete(),
-          });
-        } else {
-          subject.complete();
+    return new Observable<BaseEvent>((subscriber) => {
+      let liveSub: Subscription | null = null;
+      let cancelled = false;
+      void (async () => {
+        const record = this.cache.get(threadId);
+        const run = record?.running ? record.run : null;
+        try {
+          if (run) {
+            await run.pause();
+            try {
+              const stored = await this.store.readEvents(threadId);
+              if (cancelled) return;
+              for (const event of stored) subscriber.next(event);
+              // Same tick as the subscription below, so nothing can interleave:
+              // the store + unpersisted tail + live feed join up gap-free.
+              for (const event of run.unpersisted) subscriber.next(event);
+              liveSub = run.live.subscribe({
+                next: (event) => subscriber.next(event),
+                error: (error) => subscriber.error(error),
+                complete: () => subscriber.complete(),
+              });
+            } finally {
+              run.resume();
+            }
+          } else {
+            const stored = await this.store.readEvents(threadId);
+            if (cancelled) return;
+            for (const event of stored) subscriber.next(event);
+            for (const event of this.sealDanglingRun(threadId, stored)) subscriber.next(event);
+            subscriber.complete();
+          }
+        } catch (error) {
+          if (!cancelled) subscriber.error(error);
         }
-      } catch (error) {
-        subject.error(error);
-      }
-    })();
+      })();
+      return () => {
+        cancelled = true;
+        liveSub?.unsubscribe();
+      };
+    });
+  }
 
-    return subject.asObservable();
+  /**
+   * Synthesize the terminal events for a stored log whose last run never
+   * ended (crash mid-run). Returns the events to append to the replay, and
+   * persists them (best-effort, once) so subsequent replays read a well-formed
+   * log directly.
+   */
+  private sealDanglingRun(threadId: string, stored: BaseEvent[]): BaseEvent[] {
+    let lastRunStart = -1;
+    for (let i = stored.length - 1; i >= 0; i--) {
+      if (stored[i].type === EventType.RUN_STARTED) {
+        lastRunStart = i;
+        break;
+      }
+    }
+    if (lastRunStart === -1) return [];
+    const tail = stored.slice(lastRunStart);
+    if (tail.some((e) => e.type === EventType.RUN_FINISHED || e.type === EventType.RUN_ERROR)) {
+      return [];
+    }
+    const shadow = tail.filter((e) => LIFECYCLE_TYPES.has(e.type)).map(lifecycleShadow);
+    const appended = finalizeRunEvents(shadow, {});
+    const now = Date.now();
+    for (const event of appended) {
+      if (event.timestamp == null) event.timestamp = now;
+    }
+    const record = this.cache.get(threadId);
+    if (appended.length > 0 && record && !record.running && !this.sealing.has(threadId)) {
+      this.sealing.add(threadId);
+      void this.store
+        .appendEvents(threadId, record.agentId, appended, record.ownerId)
+        .catch((error) => this.reportStoreError(error, threadId, "seal"))
+        .finally(() => this.sealing.delete(threadId));
+    }
+    return appended;
   }
 
   /**
@@ -333,9 +621,9 @@ export class KabooAgentRunner extends AgentRunner {
   // -- LocalThreadEndpointRunner (synchronous, served from the in-memory index) --
 
   /**
-   * List threads that have at least one persisted event, most recently updated
-   * first, as CopilotKit `LocalThreadEndpointRecord`s. Served synchronously from
-   * the in-memory index (call {@link KabooAgentRunner.hydrate} after a cold start).
+   * List threads that have at least one event, most recently updated first, as
+   * CopilotKit `LocalThreadEndpointRecord`s. Served synchronously from the
+   * in-memory index (call {@link KabooAgentRunner.hydrate} after a cold start).
    *
    * `createdById` carries the thread's owner (from the store record or
    * {@link KabooAccessPolicy.ownerOf}; empty string when unknown), so hosts can
@@ -348,7 +636,7 @@ export class KabooAgentRunner extends AgentRunner {
    */
   listThreads(): LocalThreadEndpointRecord[] {
     return [...this.cache.entries()]
-      .filter(([, r]) => r.events.length > 0)
+      .filter(([, r]) => r.hasEvents)
       .map(([id, r]) => ({
         id,
         name: null,
@@ -373,24 +661,30 @@ export class KabooAgentRunner extends AgentRunner {
   }
 
   /**
-   * Get a thread's full event log from the in-memory index.
+   * Get the not-yet-persisted tail of a thread's in-flight run.
+   *
+   * Full event logs are no longer retained in memory (they are persisted
+   * incrementally and dropped once committed), so this synchronous accessor
+   * only sees what is still buffered. For the full log, read the store:
+   * `await store.readEvents(threadId)` — or replay via `connect`.
    *
    * @param threadId - The thread to read.
-   * @returns A copy of the thread's events (empty when unknown).
+   * @returns A copy of the in-flight run's unpersisted events (empty when idle).
    */
   getThreadEvents(threadId: string): BaseEvent[] {
-    return [...(this.cache.get(threadId)?.events ?? [])];
+    const run = this.cache.get(threadId)?.run;
+    return run ? [...run.unpersisted] : [];
   }
 
   /**
-   * Get a thread's latest derived state (from its last `STATE_SNAPSHOT`).
+   * Get a thread's latest state (from its last `STATE_SNAPSHOT`), folded
+   * incrementally as runs stream and hydrated from the store on cold start.
    *
    * @param threadId - The thread to read.
-   * @returns The derived state, or `null` when unknown or never emitted.
+   * @returns The latest state, or `null` when unknown or never emitted.
    */
   getThreadState(threadId: string): Record<string, unknown> | null {
-    const record = this.cache.get(threadId);
-    return record ? deriveState(record.events) : null;
+    return this.cache.get(threadId)?.state ?? null;
   }
 
   /**

@@ -88,7 +88,7 @@ nullish value must preserve any owner already recorded.
 
 > **clear**(`threadId?`): `Promise`\<`void`\>
 
-Defined in: [src/stores/postgres.ts:180](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L180)
+Defined in: [src/stores/postgres.ts:191](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L191)
 
 Delete one thread's data, or all threads when `threadId` is omitted.
 
@@ -112,7 +112,7 @@ Delete one thread's data, or all threads when `threadId` is omitted.
 
 > **listThreads**(`filter?`): `Promise`\<[`StoredThread`](../interfaces/StoredThread.md)[]\>
 
-Defined in: [src/stores/postgres.ts:154](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L154)
+Defined in: [src/stores/postgres.ts:165](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L165)
 
 List persisted threads, most recently updated first. With
 `filter.ownerId`, only that subject's threads are returned.
@@ -161,7 +161,7 @@ Read the thread's full event log, verbatim and in order.
 
 > **readMessages**(`threadId`): `Promise`\<(\{ `content`: `string`; `encryptedValue?`: `string`; `id`: `string`; `name?`: `string`; `role`: `"developer"`; \} \| \{ `content`: `string`; `encryptedValue?`: `string`; `id`: `string`; `name?`: `string`; `role`: `"system"`; \} \| \{ `content?`: `string`; `encryptedValue?`: `string`; `id`: `string`; `name?`: `string`; `role`: `"assistant"`; `toolCalls?`: `object`[]; \} \| \{ `content`: `string` \| (\{ `text`: `string`; `type`: `"text"`; \} \| \{ `metadata?`: `unknown`; `source`: \{ `mimeType`: `string`; `type`: `"data"`; `value`: `string`; \} \| \{ `mimeType?`: ... \| ...; `type`: `"url"`; `value`: `string`; \}; `type`: `"image"`; \} \| \{ `metadata?`: `unknown`; `source`: \{ `mimeType`: `string`; `type`: `"data"`; `value`: `string`; \} \| \{ `mimeType?`: ... \| ...; `type`: `"url"`; `value`: `string`; \}; `type`: `"audio"`; \} \| \{ `metadata?`: `unknown`; `source`: \{ `mimeType`: `string`; `type`: `"data"`; `value`: `string`; \} \| \{ `mimeType?`: ... \| ...; `type`: `"url"`; `value`: `string`; \}; `type`: `"video"`; \} \| \{ `metadata?`: `unknown`; `source`: \{ `mimeType`: `string`; `type`: `"data"`; `value`: `string`; \} \| \{ `mimeType?`: ... \| ...; `type`: `"url"`; `value`: `string`; \}; `type`: `"document"`; \} \| \{ `data?`: `string`; `filename?`: `string`; `id?`: `string`; `mimeType`: `string`; `type`: `"binary"`; `url?`: `string`; \})[]; `encryptedValue?`: `string`; `id`: `string`; `name?`: `string`; `role`: `"user"`; \} \| \{ `content`: `string`; `encryptedValue?`: `string`; `error?`: `string`; `id`: `string`; `role`: `"tool"`; `toolCallId`: `string`; \} \| \{ `activityType`: `string`; `content`: `Record`\<`string`, `any`\>; `id`: `string`; `role`: `"activity"`; \} \| \{ `content`: `string`; `encryptedValue?`: `string`; `id`: `string`; `role`: `"reasoning"`; \})[]\>
 
-Defined in: [src/stores/postgres.ts:145](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L145)
+Defined in: [src/stores/postgres.ts:156](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L156)
 
 Read the derived message snapshot for a thread.
 
@@ -209,7 +209,7 @@ Read the latest agent state (from the last STATE_SNAPSHOT), or `null`.
 
 > **saveMessages**(`threadId`, `messages`): `Promise`\<`void`\>
 
-Defined in: [src/stores/postgres.ts:135](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L135)
+Defined in: [src/stores/postgres.ts:146](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L146)
 
 Persist the derived message snapshot for a thread.
 

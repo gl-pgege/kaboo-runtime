@@ -4,7 +4,7 @@
 
 # Interface: KabooRunnerOptions
 
-Defined in: [src/runner.ts:41](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L41)
+Defined in: [src/runner.ts:215](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L215)
 
 Options for [KabooAgentRunner](../classes/KabooAgentRunner.md) / [createKabooRunner](../functions/createKabooRunner.md).
 
@@ -14,7 +14,7 @@ Options for [KabooAgentRunner](../classes/KabooAgentRunner.md) / [createKabooRun
 
 > `optional` **accessPolicy?**: [`KabooAccessPolicy`](KabooAccessPolicy.md)
 
-Defined in: [src/runner.ts:45](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L45)
+Defined in: [src/runner.ts:219](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L219)
 
 Ownership hooks — see [KabooAccessPolicy](KabooAccessPolicy.md).
 
@@ -24,7 +24,7 @@ Ownership hooks — see [KabooAccessPolicy](KabooAccessPolicy.md).
 
 > `optional` **onStoreError?**: (`error`, `context`) => `void`
 
-Defined in: [src/runner.ts:43](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L43)
+Defined in: [src/runner.ts:217](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L217)
 
 Called when a store write fails, so hosts can log/observe.
 

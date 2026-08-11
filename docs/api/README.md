@@ -15,9 +15,14 @@
 - [KabooAccessPolicy](interfaces/KabooAccessPolicy.md)
 - [KabooRunnerOptions](interfaces/KabooRunnerOptions.md)
 - [ListThreadsFilter](interfaces/ListThreadsFilter.md)
+- [MessageMeta](interfaces/MessageMeta.md)
 - [PostgresThreadStoreOptions](interfaces/PostgresThreadStoreOptions.md)
 - [StoredThread](interfaces/StoredThread.md)
 - [ThreadStore](interfaces/ThreadStore.md)
+
+## Variables
+
+- [MESSAGE\_META\_EVENT](variables/MESSAGE_META_EVENT.md)
 
 ## Functions
 

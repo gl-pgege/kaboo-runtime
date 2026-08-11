@@ -129,7 +129,18 @@ export class PostgresThreadStore implements ThreadStore {
   }
 
   async readState(threadId: string): Promise<Record<string, unknown> | null> {
-    return deriveState(await this.readEvents(threadId));
+    const pool = await this.ensureReady();
+    // Fetch only the last STATE_SNAPSHOT instead of deriving from the full
+    // log — logs of long agent runs can be hundreds of megabytes.
+    const { rows } = await pool.query<{ event: BaseEvent }>(
+      `SELECT event FROM kaboo_thread_events
+       WHERE thread_id = $1 AND event->>'type' = $2
+       ORDER BY seq DESC LIMIT 1`,
+      [threadId, "STATE_SNAPSHOT"],
+    );
+    const event = rows[0]?.event;
+    if (!event) return null;
+    return deriveState([event]);
   }
 
   async saveMessages(threadId: string, messages: Message[]): Promise<void> {
