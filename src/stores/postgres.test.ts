@@ -62,6 +62,30 @@ describe.skipIf(!dsn)("PostgresThreadStore (DATABASE_URL)", () => {
     expect(await store.readEvents(tid)).toEqual([]);
   });
 
+  it("persists events whose strings contain \\u0000 and lone surrogates", async () => {
+    const dirty = `dirty-${Date.now()}`;
+    // Postgres jsonb rejects both of these outright; without sanitization the
+    // insert throws `unsupported Unicode escape sequence`.
+    await store.appendEvents(dirty, "agentA", [
+      event(EventType.RUN_STARTED),
+      event(EventType.CUSTOM, { name: "tool_output", value: "before\u0000after \ud800 tail" }),
+      event(EventType.RUN_FINISHED),
+    ]);
+    const events = await store.readEvents(dirty);
+    expect(events).toHaveLength(3);
+    const custom = events[1] as BaseEvent & { value?: string };
+    expect(custom.value).toContain("before");
+    expect(custom.value).toContain("after");
+    expect(custom.value).not.toContain("\u0000");
+
+    await store.saveMessages(dirty, [
+      { id: "m1", role: "assistant", content: "nul\u0000here" } as Message,
+    ]);
+    const messages = (await store.readMessages(dirty)) as (Message & { content?: string })[];
+    expect(messages[0].content).toBe("nulhere");
+    await store.clear(dirty);
+  });
+
   it("records the owner, preserves it on nullish appends, and scopes the list", async () => {
     const owned = `owned-${Date.now()}`;
     const other = `other-${Date.now()}`;

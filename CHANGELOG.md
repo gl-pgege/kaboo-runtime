@@ -6,6 +6,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0]
+
+### Fixed
+
+- **A single store-rejected event no longer loses the whole run's log.** When a
+  write-behind batch fails, the runner now retries its events one at a time:
+  events the store deterministically rejects ("poison" events) are dropped and
+  reported via `onStoreError`, and the rest of the log keeps persisting. Before,
+  every retry resent the poison in an ever-growing batch, so nothing after it
+  was ever persisted and the retry buffer grew for the run's lifetime —
+  long runs could OOM the host. A store that rejects *everything* is still
+  treated as down: the batch stays buffered and flushes on recovery.
+- **Postgres store sanitizes `jsonb`-hostile strings.** `jsonb` rejects strings
+  containing `\u0000` or lone UTF-16 surrogates, which agent tool output (raw
+  command output, binary-ish file content) can legitimately contain. The
+  Postgres store now strips `\u0000` and repairs lone surrogates on
+  `appendEvents` and `saveMessages`, turning a formerly poisonous event into a
+  persistable one.
+
 ## [0.2.1]
 
 ### Added

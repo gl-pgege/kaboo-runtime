@@ -4,6 +4,22 @@ import type { ListThreadsFilter, StoredThread, ThreadStore } from "../store";
 import { deriveState } from "../state";
 
 /**
+ * Serialize a value for a Postgres `jsonb` column. `jsonb` rejects strings
+ * containing `\u0000` or lone UTF-16 surrogates, which agent tool output (raw
+ * command output, binary-ish file content) can legitimately contain — one such
+ * string would otherwise poison every insert of the surrounding event.
+ */
+function toJsonbSafe(value: unknown): string {
+  return JSON.stringify(value, (_key, v) => {
+    if (typeof v !== "string") return v;
+    // Cast because `toWellFormed` needs lib es2024, above this package's target.
+    const s = v as string & { toWellFormed?: () => string };
+    const wellFormed = typeof s.toWellFormed === "function" ? s.toWellFormed() : v;
+    return wellFormed.includes("\u0000") ? wellFormed.replaceAll("\u0000", "") : wellFormed;
+  });
+}
+
+/**
  * Options for {@link PostgresThreadStore}. Provide exactly one connection
  * source: either a `dsn` connection string (the store creates and owns its own
  * `pg.Pool`) or an existing `pool` to reuse. Passing neither throws.
@@ -107,7 +123,7 @@ export class PostgresThreadStore implements ThreadStore {
       for (const event of events) {
         await client.query(
           `INSERT INTO kaboo_thread_events (thread_id, event) VALUES ($1, $2)`,
-          [threadId, JSON.stringify(event)],
+          [threadId, toJsonbSafe(event)],
         );
       }
       await client.query("COMMIT");
@@ -149,7 +165,7 @@ export class PostgresThreadStore implements ThreadStore {
       `INSERT INTO kaboo_thread_messages (thread_id, messages, updated_at)
        VALUES ($1, $2, $3)
        ON CONFLICT (thread_id) DO UPDATE SET messages = EXCLUDED.messages, updated_at = EXCLUDED.updated_at`,
-      [threadId, JSON.stringify(messages), Date.now()],
+      [threadId, toJsonbSafe(messages), Date.now()],
     );
   }
 

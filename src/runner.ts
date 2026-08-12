@@ -135,14 +135,49 @@ class RunPersistence {
         this.flushing = false;
         this.schedule();
       },
-      (error) => {
-        this.lastFlushFailed = true;
-        this.flushing = false;
-        this.onError(error);
-        // No immediate retry (avoids a hot loop against a down store);
-        // the next accept() or drain() retries with a larger batch.
-      },
+      (error) => this.isolateFailure(batch, error),
     );
+  }
+
+  /**
+   * A batch write failed. Retry its events one at a time, in order, to tell
+   * *poison events* (ones the store deterministically rejects — e.g. JSON
+   * Postgres refuses) apart from a *down store*. If nothing in the batch can
+   * be persisted individually, the store is treated as down and the whole
+   * batch stays buffered for the next regular retry. If some events persist,
+   * the rejected ones are dropped and reported so the log keeps flowing;
+   * without this, every retry would resend the poison in an ever-growing
+   * batch, wedging persistence for the rest of the run and retaining it all
+   * in memory.
+   */
+  private async isolateFailure(batch: BaseEvent[], batchError: unknown): Promise<void> {
+    let persisted = 0;
+    const failures: { event: BaseEvent; error: unknown }[] = [];
+    for (const event of batch) {
+      try {
+        await this.flushBatch([event]);
+        persisted += 1;
+      } catch (error) {
+        failures.push({ event, error });
+      }
+    }
+    if (persisted === 0) {
+      this.lastFlushFailed = true;
+      this.flushing = false;
+      this.onError(batchError);
+      return;
+    }
+    for (const { event, error } of failures) {
+      this.onError(
+        new Error(
+          `dropped event of type ${String((event as { type?: unknown }).type)} rejected by the store: ${String(error)}`,
+        ),
+      );
+    }
+    this.unpersisted.splice(0, batch.length);
+    this.lastFlushFailed = false;
+    this.flushing = false;
+    this.schedule();
   }
 
   /**

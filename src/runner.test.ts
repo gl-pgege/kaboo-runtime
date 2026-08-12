@@ -107,6 +107,38 @@ class FailingStore implements ThreadStore {
   }
 }
 
+/**
+ * A store that rejects any batch containing a "poison" CUSTOM event, whether
+ * batched or alone — modeling e.g. Postgres refusing an event's JSON.
+ */
+class PoisonRejectingStore extends InMemoryThreadStore {
+  appendEvents(
+    threadId: string,
+    agentId: string,
+    events: BaseEvent[],
+    ownerId?: string | null,
+  ): Promise<void> {
+    if (events.some((e) => (e as { name?: string }).name === "poison")) {
+      return Promise.reject(new Error("unsupported Unicode escape sequence"));
+    }
+    return super.appendEvents(threadId, agentId, events, ownerId);
+  }
+}
+
+/** A store that rejects every write while `down` is true. */
+class OutageStore extends InMemoryThreadStore {
+  down = true;
+  appendEvents(
+    threadId: string,
+    agentId: string,
+    events: BaseEvent[],
+    ownerId?: string | null,
+  ): Promise<void> {
+    if (this.down) return Promise.reject(new Error("store down"));
+    return super.appendEvents(threadId, agentId, events, ownerId);
+  }
+}
+
 const finishedRun = (): FakeAgent =>
   new FakeAgent([
     { type: EventType.RUN_STARTED, threadId: "t1", runId: "r1" } as BaseEvent,
@@ -313,6 +345,45 @@ describe("KabooAgentRunner", () => {
     await collect(runner.run(runReq("t1", finishedRun(), input())));
     expect(contexts.length).toBeGreaterThanOrEqual(1);
     expect(contexts).toContainEqual({ threadId: "t1", op: "persist" });
+  });
+
+  it("drops a poison event the store rejects and persists the rest of the log", async () => {
+    const store = new PoisonRejectingStore();
+    const errors: unknown[] = [];
+    const runner = new KabooAgentRunner(store, {
+      onStoreError: (error) => errors.push(error),
+    });
+    const agent = new FakeAgent([
+      { type: EventType.RUN_STARTED, threadId: "t1", runId: "r1" } as BaseEvent,
+      { type: EventType.CUSTOM, name: "poison", value: "x" } as unknown as BaseEvent,
+      { type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1" } as BaseEvent,
+    ]);
+    await collect(runner.run(runReq("t1", agent, input())));
+
+    const persisted = await store.readEvents("t1");
+    expect(persisted.map((e) => e.type)).toEqual([
+      EventType.RUN_STARTED,
+      EventType.RUN_FINISHED,
+    ]);
+    expect(errors.some((e) => String(e).includes("dropped event"))).toBe(true);
+  });
+
+  it("keeps the whole batch buffered while the store is down and flushes on recovery", async () => {
+    const store = new OutageStore();
+    const runner = new KabooAgentRunner(store, { onStoreError: () => {} });
+    const agent = new PausableAgent();
+    const done = collect(runner.run(runReq("t1", agent, input())));
+    await agent.started.promise;
+    await settle();
+    expect(await store.readEvents("t1")).toEqual([]);
+
+    store.down = false;
+    agent.abortRun();
+    await done;
+    await settle();
+    const types = (await store.readEvents("t1")).map((e) => e.type);
+    expect(types[0]).toBe(EventType.RUN_STARTED);
+    expect(types).toContain(EventType.RUN_FINISHED);
   });
 
   it("thread accessors reflect a completed run and return copies", async () => {
