@@ -4,7 +4,7 @@
 
 # Class: PostgresThreadStore
 
-Defined in: [src/stores/postgres.ts:32](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L32)
+Defined in: [src/stores/postgres.ts:48](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L48)
 
 Durable [ThreadStore](../interfaces/ThreadStore.md) backed by Postgres. Uses its own conversation
 tables (`kaboo_threads`, `kaboo_thread_events`, `kaboo_thread_messages`),
@@ -30,7 +30,7 @@ const runner = createKabooRunner(store);
 
 > **new PostgresThreadStore**(`options`): `PostgresThreadStore`
 
-Defined in: [src/stores/postgres.ts:37](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L37)
+Defined in: [src/stores/postgres.ts:53](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L53)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [src/stores/postgres.ts:37](https://github.com/gl-pgege/kaboo-runtim
 
 > **appendEvents**(`threadId`, `agentId`, `events`, `ownerId?`): `Promise`\<`void`\>
 
-Defined in: [src/stores/postgres.ts:85](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L85)
+Defined in: [src/stores/postgres.ts:101](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L101)
 
 Append a completed run's events (in order) to the thread's log.
 
@@ -88,7 +88,7 @@ nullish value must preserve any owner already recorded.
 
 > **clear**(`threadId?`): `Promise`\<`void`\>
 
-Defined in: [src/stores/postgres.ts:191](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L191)
+Defined in: [src/stores/postgres.ts:227](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L227)
 
 Delete one thread's data, or all threads when `threadId` is omitted.
 
@@ -112,7 +112,7 @@ Delete one thread's data, or all threads when `threadId` is omitted.
 
 > **listThreads**(`filter?`): `Promise`\<[`StoredThread`](../interfaces/StoredThread.md)[]\>
 
-Defined in: [src/stores/postgres.ts:165](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L165)
+Defined in: [src/stores/postgres.ts:201](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L201)
 
 List persisted threads, most recently updated first. With
 `filter.ownerId`, only that subject's threads are returned.
@@ -137,7 +137,7 @@ List persisted threads, most recently updated first. With
 
 > **readEvents**(`threadId`): `Promise`\<`objectOutputType`\<\{ `rawEvent`: `ZodOptional`\<`ZodAny`\>; `timestamp`: `ZodOptional`\<`ZodNumber`\>; `type`: `ZodNativeEnum`\<*typeof* `EventType`\>; \}, `ZodTypeAny`, `"passthrough"`\>[]\>
 
-Defined in: [src/stores/postgres.ts:122](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L122)
+Defined in: [src/stores/postgres.ts:158](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L158)
 
 Read the thread's full event log, verbatim and in order.
 
@@ -161,7 +161,7 @@ Read the thread's full event log, verbatim and in order.
 
 > **readMessages**(`threadId`): `Promise`\<(\{ `content`: `string`; `encryptedValue?`: `string`; `id`: `string`; `name?`: `string`; `role`: `"developer"`; \} \| \{ `content`: `string`; `encryptedValue?`: `string`; `id`: `string`; `name?`: `string`; `role`: `"system"`; \} \| \{ `content?`: `string`; `encryptedValue?`: `string`; `id`: `string`; `name?`: `string`; `role`: `"assistant"`; `toolCalls?`: `object`[]; \} \| \{ `content`: `string` \| (\{ `text`: `string`; `type`: `"text"`; \} \| \{ `metadata?`: `unknown`; `source`: \{ `mimeType`: `string`; `type`: `"data"`; `value`: `string`; \} \| \{ `mimeType?`: ... \| ...; `type`: `"url"`; `value`: `string`; \}; `type`: `"image"`; \} \| \{ `metadata?`: `unknown`; `source`: \{ `mimeType`: `string`; `type`: `"data"`; `value`: `string`; \} \| \{ `mimeType?`: ... \| ...; `type`: `"url"`; `value`: `string`; \}; `type`: `"audio"`; \} \| \{ `metadata?`: `unknown`; `source`: \{ `mimeType`: `string`; `type`: `"data"`; `value`: `string`; \} \| \{ `mimeType?`: ... \| ...; `type`: `"url"`; `value`: `string`; \}; `type`: `"video"`; \} \| \{ `metadata?`: `unknown`; `source`: \{ `mimeType`: `string`; `type`: `"data"`; `value`: `string`; \} \| \{ `mimeType?`: ... \| ...; `type`: `"url"`; `value`: `string`; \}; `type`: `"document"`; \} \| \{ `data?`: `string`; `filename?`: `string`; `id?`: `string`; `mimeType`: `string`; `type`: `"binary"`; `url?`: `string`; \})[]; `encryptedValue?`: `string`; `id`: `string`; `name?`: `string`; `role`: `"user"`; \} \| \{ `content`: `string`; `encryptedValue?`: `string`; `error?`: `string`; `id`: `string`; `role`: `"tool"`; `toolCallId`: `string`; \} \| \{ `activityType`: `string`; `content`: `Record`\<`string`, `any`\>; `id`: `string`; `role`: `"activity"`; \} \| \{ `content`: `string`; `encryptedValue?`: `string`; `id`: `string`; `role`: `"reasoning"`; \})[]\>
 
-Defined in: [src/stores/postgres.ts:156](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L156)
+Defined in: [src/stores/postgres.ts:192](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L192)
 
 Read the derived message snapshot for a thread.
 
@@ -185,7 +185,7 @@ Read the derived message snapshot for a thread.
 
 > **readState**(`threadId`): `Promise`\<`Record`\<`string`, `unknown`\> \| `null`\>
 
-Defined in: [src/stores/postgres.ts:131](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L131)
+Defined in: [src/stores/postgres.ts:167](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L167)
 
 Read the latest agent state (from the last STATE_SNAPSHOT), or `null`.
 
@@ -209,7 +209,7 @@ Read the latest agent state (from the last STATE_SNAPSHOT), or `null`.
 
 > **saveMessages**(`threadId`, `messages`): `Promise`\<`void`\>
 
-Defined in: [src/stores/postgres.ts:146](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L146)
+Defined in: [src/stores/postgres.ts:182](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L182)
 
 Persist the derived message snapshot for a thread.
 

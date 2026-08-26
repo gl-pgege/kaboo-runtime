@@ -187,6 +187,47 @@ describe("KabooAgentRunner", () => {
     ]);
   });
 
+  it("recovers messages the event log lost (run failed before the agent emitted)", async () => {
+    const store = new InMemoryThreadStore();
+    // A startup failure persists only RUN_STARTED / RUN_ERROR, while the
+    // message snapshot (saved even on failure) still has the user's message.
+    await store.appendEvents("t1", "test", [
+      { type: EventType.RUN_STARTED, threadId: "t1", runId: "r1" } as BaseEvent,
+      { type: EventType.RUN_ERROR, message: "invalid workflow config" } as unknown as BaseEvent,
+    ]);
+    await store.saveMessages("t1", [{ id: "u1", role: "user", content: "build a dashboard" } as Message]);
+
+    const replayed = await collect(new KabooAgentRunner(store).connect({ threadId: "t1" }));
+    expect(replayed.map((e) => e.type)).toEqual([
+      EventType.RUN_STARTED,
+      EventType.RUN_ERROR,
+      EventType.MESSAGES_SNAPSHOT,
+    ]);
+    const snapshot = replayed[2] as BaseEvent & { messages: Message[] };
+    expect(snapshot.messages.map((m) => m.id)).toEqual(["u1"]);
+  });
+
+  it("does not append a snapshot when the log already covers every message", async () => {
+    const store = new InMemoryThreadStore();
+    await store.appendEvents("t1", "test", [
+      { type: EventType.RUN_STARTED, threadId: "t1", runId: "r1" } as BaseEvent,
+      {
+        type: EventType.MESSAGES_SNAPSHOT,
+        messages: [{ id: "u1", role: "user", content: "hi" }],
+      } as unknown as BaseEvent,
+      { type: EventType.TEXT_MESSAGE_START, messageId: "a1", role: "assistant" } as unknown as BaseEvent,
+      { type: EventType.TEXT_MESSAGE_END, messageId: "a1" } as unknown as BaseEvent,
+      { type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1" } as BaseEvent,
+    ]);
+    await store.saveMessages("t1", [
+      { id: "u1", role: "user", content: "hi" } as Message,
+      { id: "a1", role: "assistant", content: "yo" } as Message,
+    ]);
+
+    const replayed = await collect(new KabooAgentRunner(store).connect({ threadId: "t1" }));
+    expect(replayed.filter((e) => e.type === EventType.MESSAGES_SNAPSHOT)).toHaveLength(1);
+  });
+
   it("injects persisted state (kaboo_history) into the next run's input", async () => {
     const store = new InMemoryThreadStore();
     const runner = new KabooAgentRunner(store);

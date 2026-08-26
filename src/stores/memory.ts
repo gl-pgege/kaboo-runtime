@@ -1,5 +1,6 @@
 import type { BaseEvent, Message } from "@ag-ui/client";
 import type { ListThreadsFilter, StoredThread, ThreadStore } from "../store";
+import { pruneSupersededActivitySnapshots } from "../store";
 import { deriveState } from "../state";
 
 interface MemoryRecord {
@@ -46,6 +47,9 @@ export class InMemoryThreadStore implements ThreadStore {
     record.agentId = agentId;
     if (ownerId != null) record.ownerId = ownerId;
     record.events.push(...events);
+    if (events.some((e) => e.type === "ACTIVITY_SNAPSHOT")) {
+      record.events = pruneSupersededActivitySnapshots(record.events);
+    }
     record.updatedAt = Date.now();
   }
 

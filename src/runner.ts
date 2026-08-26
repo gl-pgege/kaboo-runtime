@@ -571,6 +571,9 @@ export class KabooAgentRunner extends AgentRunner {
             if (cancelled) return;
             for (const event of stored) subscriber.next(event);
             for (const event of this.sealDanglingRun(threadId, stored)) subscriber.next(event);
+            const reconciled = await this.reconcileLostMessages(threadId, stored);
+            if (cancelled) return;
+            for (const event of reconciled) subscriber.next(event);
             subscriber.complete();
           }
         } catch (error) {
@@ -618,6 +621,48 @@ export class KabooAgentRunner extends AgentRunner {
         .finally(() => this.sealing.delete(threadId));
     }
     return appended;
+  }
+
+  /**
+   * Recover messages the event log lost. A run that errors before its agent
+   * emits anything (bad config, unreachable backend) leaves only
+   * `RUN_STARTED` / `RUN_ERROR` in the log, yet the derived message snapshot —
+   * persisted even on failure — still holds the run's input messages. A replay
+   * of such a log renders the conversation without those messages. When the
+   * snapshot contains message ids the log never materializes, close the replay
+   * with a `MESSAGES_SNAPSHOT` so the client shows the full conversation.
+   * No-op (and zero risk) when the log already covers every snapshot message.
+   */
+  private async reconcileLostMessages(threadId: string, stored: BaseEvent[]): Promise<BaseEvent[]> {
+    let messages: Message[];
+    try {
+      messages = await this.store.readMessages(threadId);
+    } catch (error) {
+      this.reportStoreError(error, threadId, "reconcile");
+      return [];
+    }
+    if (messages.length === 0) return [];
+    const seen = new Set<string>();
+    for (const event of stored) {
+      // CUSTOM events (message meta) reference ids without materializing
+      // messages on the client, so they don't count as coverage.
+      if (event.type === EventType.CUSTOM) continue;
+      const e = event as BaseEvent & { messageId?: unknown; messages?: unknown };
+      if (typeof e.messageId === "string") seen.add(e.messageId);
+      if (event.type === EventType.MESSAGES_SNAPSHOT && Array.isArray(e.messages)) {
+        for (const m of e.messages) {
+          const id = (m as { id?: unknown })?.id;
+          if (typeof id === "string") seen.add(id);
+        }
+      }
+    }
+    const lost = messages.some(
+      (m) => typeof m.id === "string" && m.id.length > 0 && !seen.has(m.id),
+    );
+    if (!lost) return [];
+    return [
+      { type: EventType.MESSAGES_SNAPSHOT, messages, timestamp: Date.now() } as unknown as BaseEvent,
+    ];
   }
 
   /**

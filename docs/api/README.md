@@ -28,3 +28,4 @@
 
 - [createKabooRunner](functions/createKabooRunner.md)
 - [deriveState](functions/deriveState.md)
+- [pruneSupersededActivitySnapshots](functions/pruneSupersededActivitySnapshots.md)

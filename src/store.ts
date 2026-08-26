@@ -27,8 +27,14 @@ export interface ListThreadsFilter {
  * control where conversations live. `kaboo-runtime` ships `InMemoryThreadStore`
  * and `PostgresThreadStore` out of the box.
  *
- * The store persists events verbatim (no compaction) so `ACTIVITY_SNAPSHOT` /
- * `CUSTOM` events survive the round-trip and the full UI can be replayed.
+ * The store persists events verbatim so `ACTIVITY_SNAPSHOT` / `CUSTOM` events
+ * survive the round-trip and the full UI can be replayed — with one exception:
+ * superseded `ACTIVITY_SNAPSHOT` events. Each snapshot fully replaces the
+ * previous one for its message, so only the latest per message affects a
+ * replay, while a long run can emit thousands of them at hundreds of KB each
+ * (a single conversation reaching hundreds of MB in practice). Stores prune
+ * superseded snapshots on append via
+ * {@link pruneSupersededActivitySnapshots}; custom stores should do the same.
  */
 export interface ThreadStore {
   /**
@@ -59,4 +65,25 @@ export interface ThreadStore {
   listThreads(filter?: ListThreadsFilter): Promise<StoredThread[]>;
   /** Delete one thread's data, or all threads when `threadId` is omitted. */
   clear(threadId?: string): Promise<void>;
+}
+
+/**
+ * Drop `ACTIVITY_SNAPSHOT` events that a later snapshot for the same message
+ * fully replaces, preserving order. A replay produces the identical final UI
+ * because each snapshot carries the complete activity state for its message.
+ * All other events pass through untouched.
+ */
+export function pruneSupersededActivitySnapshots(events: BaseEvent[]): BaseEvent[] {
+  const lastPerMessage = new Map<unknown, number>();
+  events.forEach((event, index) => {
+    if (event.type === "ACTIVITY_SNAPSHOT") {
+      lastPerMessage.set((event as { messageId?: unknown }).messageId, index);
+    }
+  });
+  if (lastPerMessage.size === 0) return events;
+  return events.filter(
+    (event, index) =>
+      event.type !== "ACTIVITY_SNAPSHOT" ||
+      lastPerMessage.get((event as { messageId?: unknown }).messageId) === index,
+  );
 }

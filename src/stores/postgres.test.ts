@@ -62,6 +62,28 @@ describe.skipIf(!dsn)("PostgresThreadStore (DATABASE_URL)", () => {
     expect(await store.readEvents(tid)).toEqual([]);
   });
 
+  it("prunes superseded ACTIVITY_SNAPSHOT events on append", async () => {
+    const t = `${tid}-snap`;
+    const snap = (messageId: string, step: number): BaseEvent =>
+      ({ type: "ACTIVITY_SNAPSHOT", messageId, content: { step }, replace: true }) as unknown as BaseEvent;
+    await store.appendEvents(t, "agentA", [event(EventType.RUN_STARTED), snap("m1", 1)]);
+    await store.appendEvents(t, "agentA", [snap("m1", 2), snap("m2", 1), event(EventType.RUN_FINISHED)]);
+    const events = await store.readEvents(t);
+    expect(events.map((e) => e.type)).toEqual([
+      EventType.RUN_STARTED,
+      "ACTIVITY_SNAPSHOT",
+      "ACTIVITY_SNAPSHOT",
+      EventType.RUN_FINISHED,
+    ]);
+    const snaps = events.filter((e) => e.type === "ACTIVITY_SNAPSHOT") as Array<
+      BaseEvent & { messageId: string; content: { step: number } }
+    >;
+    expect(snaps.map((s) => [s.messageId, s.content.step])).toEqual([
+      ["m1", 2],
+      ["m2", 1],
+    ]);
+  });
+
   it("persists events whose strings contain \\u0000 and lone surrogates", async () => {
     const dirty = `dirty-${Date.now()}`;
     // Postgres jsonb rejects both of these outright; without sanitization the

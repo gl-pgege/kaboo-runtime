@@ -6,6 +6,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.2]
+
+### Fixed
+
+- **Conversations no longer appear empty after a run that failed at startup.**
+  A run that errors before its agent emits anything (bad config, unreachable
+  backend) leaves only `RUN_STARTED` / `RUN_ERROR` in the event log, so a
+  replay rendered the conversation without the user's message — even though
+  the derived message snapshot (persisted even on failure) still had it.
+  `connect` now reconciles the replayed log against the message snapshot and
+  closes the stream with a `MESSAGES_SNAPSHOT` when messages would otherwise
+  be lost. No-op for healthy logs.
+
+## [0.5.1]
+
+### Fixed
+
+- **Reconnecting to a long conversation no longer replays hundreds of MB.**
+  Stores now prune superseded `ACTIVITY_SNAPSHOT` events on append: each
+  snapshot fully replaces the previous one for its message, so only the latest
+  per message is kept. Long agent runs previously accumulated thousands of
+  snapshots at hundreds of KB each, making `connect` replay (and the stored
+  log) grow into the hundreds of MB per conversation. Replay output is
+  visually identical. The shared helper is exported as
+  `pruneSupersededActivitySnapshots` for custom stores.
+
 ## [0.5.0]
 
 ### Fixed

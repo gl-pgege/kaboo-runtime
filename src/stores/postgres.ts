@@ -126,6 +126,26 @@ export class PostgresThreadStore implements ThreadStore {
           [threadId, toJsonbSafe(event)],
         );
       }
+      if (events.some((e) => e.type === "ACTIVITY_SNAPSHOT")) {
+        // Each ACTIVITY_SNAPSHOT fully replaces the previous one for its
+        // message, so only the latest per message matters for replay. Pruning
+        // on append keeps the log bounded — long runs otherwise accumulate
+        // thousands of superseded snapshots at hundreds of KB each.
+        await client.query(
+          `DELETE FROM kaboo_thread_events e
+           USING (
+             SELECT event->>'messageId' AS message_id, max(seq) AS keep_seq
+             FROM kaboo_thread_events
+             WHERE thread_id = $1 AND event->>'type' = 'ACTIVITY_SNAPSHOT'
+             GROUP BY event->>'messageId'
+           ) latest
+           WHERE e.thread_id = $1
+             AND e.event->>'type' = 'ACTIVITY_SNAPSHOT'
+             AND e.event->>'messageId' IS NOT DISTINCT FROM latest.message_id
+             AND e.seq < latest.keep_seq`,
+          [threadId],
+        );
+      }
       await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");

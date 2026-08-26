@@ -1,4 +1,5 @@
 export type { ThreadStore, StoredThread, ListThreadsFilter } from "./store";
+export { pruneSupersededActivitySnapshots } from "./store";
 export { deriveState } from "./state";
 export { InMemoryThreadStore } from "./stores/memory";
 export { PostgresThreadStore } from "./stores/postgres";
