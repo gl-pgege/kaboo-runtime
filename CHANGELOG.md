@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.1]
+
+### Fixed
+
+- **The peer ranges stop at the CopilotKit versions kaboo-runtime 0.6 is tested
+  with,** 1.62 to 1.71.1 (AG-UI 0.0.57 to 0.0.59). CopilotKit 1.71.2 and later
+  pull in AG-UI 1.0 pieces: from 1.71.2 its `@ag-ui/mcp-apps-middleware` range
+  resolves to a release that needs `@ag-ui/client` 1.0, and 1.76 moves to
+  `@ag-ui/client` 1.0 itself. Those need the next minor release.
+
 ## [0.6.0]
 
 See [Upgrading](docs/upgrading.md#06) for the code before and after.

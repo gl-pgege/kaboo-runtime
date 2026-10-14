@@ -1,6 +1,6 @@
 {
   "name": "@pgege/kaboo-runtime",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "A persistence plugin for the CopilotKit runtime: a custom AgentRunner + pluggable ThreadStore that persists the full AG-UI event log and replays it on reload. Framework-agnostic, no HTTP layer.",
   "author": "gl-pgege",
   "license": "MIT",
@@ -65,8 +65,8 @@
     "prepack": "yarn build && yarn docs:api && yarn docs:llms && yarn docs:verify && yarn test"
   },
   "peerDependencies": {
-    "@ag-ui/client": ">=0.0.57",
-    "@copilotkit/runtime": ">=1.62.0",
+    "@ag-ui/client": ">=0.0.57 <1",
+    "@copilotkit/runtime": ">=1.62.0 <1.71.2",
     "pg": ">=8.0.0",
     "rxjs": ">=7.0.0"
   },

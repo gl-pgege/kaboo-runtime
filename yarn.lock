@@ -1155,8 +1155,8 @@ __metadata:
     typescript: "npm:^5.8.3"
     vitest: "npm:^2"
   peerDependencies:
-    "@ag-ui/client": ">=0.0.57"
-    "@copilotkit/runtime": ">=1.62.0"
+    "@ag-ui/client": ">=0.0.57 <1"
+    "@copilotkit/runtime": ">=1.62.0 <1.71.2"
     pg: ">=8.0.0"
     rxjs: ">=7.0.0"
   peerDependenciesMeta:
