@@ -93,7 +93,6 @@ writeFileSync(
         skipLibCheck: true,
         noEmit: true,
         types: ["node"],
-        baseUrl: ".",
         paths: {
           "@pgege/kaboo-runtime": ["../dist/index.d.ts"],
         },
