@@ -4,7 +4,7 @@
 
 # Interface: GrantQuery
 
-Defined in: src/approvals.ts:49
+Defined in: [src/approvals.ts:49](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L49)
 
 Which grants a run sees: the owner's "always" grants plus this conversation's.
 
@@ -14,7 +14,7 @@ Which grants a run sees: the owner's "always" grants plus this conversation's.
 
 > **agentId**: `string`
 
-Defined in: src/approvals.ts:53
+Defined in: [src/approvals.ts:53](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L53)
 
 The agent running.
 
@@ -24,7 +24,7 @@ The agent running.
 
 > **ownerId**: `string`
 
-Defined in: src/approvals.ts:51
+Defined in: [src/approvals.ts:51](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L51)
 
 The thread's owner.
 
@@ -34,6 +34,6 @@ The thread's owner.
 
 > **threadId**: `string`
 
-Defined in: src/approvals.ts:55
+Defined in: [src/approvals.ts:55](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L55)
 
 The conversation running.

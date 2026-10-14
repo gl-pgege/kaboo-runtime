@@ -4,7 +4,7 @@
 
 # Interface: KabooRunContext
 
-Defined in: src/approvals.ts:110
+Defined in: [src/approvals.ts:110](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L110)
 
 Everything a run's hooks know about the run.
 
@@ -14,7 +14,7 @@ Everything a run's hooks know about the run.
 
 > **agentId**: `string`
 
-Defined in: src/approvals.ts:114
+Defined in: [src/approvals.ts:114](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L114)
 
 The CopilotKit agent running.
 
@@ -24,7 +24,7 @@ The CopilotKit agent running.
 
 > **input**: `object`
 
-Defined in: src/approvals.ts:118
+Defined in: [src/approvals.ts:118](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L118)
 
 The run's input as the client sent it.
 
@@ -70,7 +70,7 @@ The run's input as the client sent it.
 
 > **ownerId**: `string` \| `null`
 
-Defined in: src/approvals.ts:116
+Defined in: [src/approvals.ts:116](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L116)
 
 The thread's owner (from `accessPolicy.ownerOf`), or `null` when unknown.
 
@@ -80,6 +80,6 @@ The thread's owner (from `accessPolicy.ownerOf`), or `null` when unknown.
 
 > **threadId**: `string`
 
-Defined in: src/approvals.ts:112
+Defined in: [src/approvals.ts:112](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L112)
 
 The conversation.

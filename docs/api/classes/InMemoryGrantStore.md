@@ -4,7 +4,7 @@
 
 # Class: InMemoryGrantStore
 
-Defined in: src/stores/memory-grants.ts:29
+Defined in: [src/stores/memory-grants.ts:29](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/memory-grants.ts#L29)
 
 Process-memory [GrantStore](../interfaces/GrantStore.md): remembered approvals last until the
 process restarts. Suited to local development and tests; use
@@ -41,7 +41,7 @@ const runner = createKabooRunner(new InMemoryThreadStore(), {
 
 > **list**(`query`): `Promise`\<[`ToolGrant`](../interfaces/ToolGrant.md)[]\>
 
-Defined in: src/stores/memory-grants.ts:32
+Defined in: [src/stores/memory-grants.ts:32](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/memory-grants.ts#L32)
 
 The grants a run may use: the owner's "always" grants and the thread's own.
 
@@ -65,7 +65,7 @@ The grants a run may use: the owner's "always" grants and the thread's own.
 
 > **listForOwner**(`ownerId`): `Promise`\<[`ToolGrant`](../interfaces/ToolGrant.md)[]\>
 
-Defined in: src/stores/memory-grants.ts:54
+Defined in: [src/stores/memory-grants.ts:54](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/memory-grants.ts#L54)
 
 Every grant the owner holds, for a settings page.
 
@@ -89,7 +89,7 @@ Every grant the owner holds, for a settings page.
 
 > **revoke**(`ownerId`, `id`): `Promise`\<`void`\>
 
-Defined in: src/stores/memory-grants.ts:50
+Defined in: [src/stores/memory-grants.ts:50](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/memory-grants.ts#L50)
 
 Revoke one of the owner's grants. A grant owned by someone else is left alone.
 
@@ -117,7 +117,7 @@ Revoke one of the owner's grants. A grant owned by someone else is left alone.
 
 > **save**(`grant`): `Promise`\<[`ToolGrant`](../interfaces/ToolGrant.md)\>
 
-Defined in: src/stores/memory-grants.ts:41
+Defined in: [src/stores/memory-grants.ts:41](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/memory-grants.ts#L41)
 
 Save a grant, replacing an identical one (same owner, agent, thread, tool, subject).
 

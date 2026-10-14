@@ -6,7 +6,7 @@
 
 > **resolveApprovalDecisions**(`resume`, `state`, `now?`): [`ApprovalDecision`](../interfaces/ApprovalDecision.md)[]
 
-Defined in: src/approvals.ts:200
+Defined in: [src/approvals.ts:200](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L200)
 
 Match a run's `resume` entries against the approvals the agent is waiting
 on (`state.kaboo_session.approvals`, as persisted from the agent's own

@@ -4,7 +4,7 @@
 
 # Interface: GrantStore
 
-Defined in: src/approvals.ts:64
+Defined in: [src/approvals.ts:64](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L64)
 
 Pluggable persistence for remembered approvals — the counterpart of
 [ThreadStore](ThreadStore.md) for decisions. `kaboo-runtime` ships
@@ -17,7 +17,7 @@ grants elsewhere (their own domain service) implement this against it.
 
 > **list**(`query`): `Promise`\<[`ToolGrant`](ToolGrant.md)[]\>
 
-Defined in: src/approvals.ts:66
+Defined in: [src/approvals.ts:66](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L66)
 
 The grants a run may use: the owner's "always" grants and the thread's own.
 
@@ -37,7 +37,7 @@ The grants a run may use: the owner's "always" grants and the thread's own.
 
 > **listForOwner**(`ownerId`): `Promise`\<[`ToolGrant`](ToolGrant.md)[]\>
 
-Defined in: src/approvals.ts:72
+Defined in: [src/approvals.ts:72](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L72)
 
 Every grant the owner holds, for a settings page.
 
@@ -57,7 +57,7 @@ Every grant the owner holds, for a settings page.
 
 > **revoke**(`ownerId`, `id`): `Promise`\<`void`\>
 
-Defined in: src/approvals.ts:70
+Defined in: [src/approvals.ts:70](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L70)
 
 Revoke one of the owner's grants. A grant owned by someone else is left alone.
 
@@ -81,7 +81,7 @@ Revoke one of the owner's grants. A grant owned by someone else is left alone.
 
 > **save**(`grant`): `Promise`\<[`ToolGrant`](ToolGrant.md)\>
 
-Defined in: src/approvals.ts:68
+Defined in: [src/approvals.ts:68](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L68)
 
 Save a grant, replacing an identical one (same owner, agent, thread, tool, subject).
 

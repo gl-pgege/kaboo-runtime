@@ -4,7 +4,7 @@
 
 # Interface: ApprovalDecision
 
-Defined in: src/approvals.ts:79
+Defined in: [src/approvals.ts:79](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L79)
 
 A person's answer to one approval request, matched against what the agent
 actually asked (`kaboo_session.approvals`), never against client claims.
@@ -15,7 +15,7 @@ actually asked (`kaboo_session.approvals`), never against client claims.
 
 > **decision**: `"approved"` \| `"denied"` \| `"skipped"` \| `"expired"`
 
-Defined in: src/approvals.ts:92
+Defined in: [src/approvals.ts:92](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L92)
 
 `approved`, `denied` (with an optional `reason`), `skipped` (the Skip
 button or dismissing a card), or `expired` (answered after the deadline).
@@ -26,7 +26,7 @@ button or dismissing a card), or `expired` (answered after the deadline).
 
 > **input**: `unknown`
 
-Defined in: src/approvals.ts:98
+Defined in: [src/approvals.ts:98](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L98)
 
 The input the call runs with: the agent's, or the person's edit.
 
@@ -36,7 +36,7 @@ The input the call runs with: the agent's, or the person's edit.
 
 > **interruptId**: `string`
 
-Defined in: src/approvals.ts:81
+Defined in: [src/approvals.ts:81](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L81)
 
 The AG-UI interrupt id answered.
 
@@ -46,7 +46,7 @@ The AG-UI interrupt id answered.
 
 > `optional` **reason?**: `string`
 
-Defined in: src/approvals.ts:96
+Defined in: [src/approvals.ts:96](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L96)
 
 The person's reason for a denial.
 
@@ -56,7 +56,7 @@ The person's reason for a denial.
 
 > `optional` **request?**: `string`
 
-Defined in: src/approvals.ts:106
+Defined in: [src/approvals.ts:106](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L106)
 
 The tool's own request id, when the tool asked for this approval itself
 (a `kaboo_approval` reply). Read from the request the agent published,
@@ -70,7 +70,7 @@ grant, because the service remembers it.
 
 > **scope**: [`ApprovalScope`](../type-aliases/ApprovalScope.md)
 
-Defined in: src/approvals.ts:94
+Defined in: [src/approvals.ts:94](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L94)
 
 For an approval, how far it reaches; `once` otherwise.
 
@@ -80,7 +80,7 @@ For an approval, how far it reaches; `once` otherwise.
 
 > **subject**: [`ApprovalSubject`](ApprovalSubject.md)
 
-Defined in: src/approvals.ts:87
+Defined in: [src/approvals.ts:87](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L87)
 
 What a remembered decision covers.
 
@@ -90,7 +90,7 @@ What a remembered decision covers.
 
 > **tool**: `string`
 
-Defined in: src/approvals.ts:85
+Defined in: [src/approvals.ts:85](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L85)
 
 The gated tool.
 
@@ -100,6 +100,6 @@ The gated tool.
 
 > **toolCallId**: `string` \| `null`
 
-Defined in: src/approvals.ts:83
+Defined in: [src/approvals.ts:83](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L83)
 
 The tool call the request was raised for, when known.

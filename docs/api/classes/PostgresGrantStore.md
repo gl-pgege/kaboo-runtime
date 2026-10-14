@@ -4,7 +4,7 @@
 
 # Class: PostgresGrantStore
 
-Defined in: src/stores/postgres-grants.ts:62
+Defined in: [src/stores/postgres-grants.ts:62](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres-grants.ts#L62)
 
 Durable [GrantStore](../interfaces/GrantStore.md) backed by Postgres, in its own `kaboo_tool_grants`
 table (created on first use, independent of any application schema). `pg`
@@ -34,7 +34,7 @@ const runner = createKabooRunner(new PostgresThreadStore({ pool }), {
 
 > **new PostgresGrantStore**(`options`): `PostgresGrantStore`
 
-Defined in: src/stores/postgres-grants.ts:67
+Defined in: [src/stores/postgres-grants.ts:67](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres-grants.ts#L67)
 
 #### Parameters
 
@@ -52,7 +52,7 @@ Defined in: src/stores/postgres-grants.ts:67
 
 > **list**(`query`): `Promise`\<[`ToolGrant`](../interfaces/ToolGrant.md)[]\>
 
-Defined in: src/stores/postgres-grants.ts:110
+Defined in: [src/stores/postgres-grants.ts:110](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres-grants.ts#L110)
 
 The grants a run may use: the owner's "always" grants and the thread's own.
 
@@ -76,7 +76,7 @@ The grants a run may use: the owner's "always" grants and the thread's own.
 
 > **listForOwner**(`ownerId`): `Promise`\<[`ToolGrant`](../interfaces/ToolGrant.md)[]\>
 
-Defined in: src/stores/postgres-grants.ts:147
+Defined in: [src/stores/postgres-grants.ts:147](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres-grants.ts#L147)
 
 Every grant the owner holds, for a settings page.
 
@@ -100,7 +100,7 @@ Every grant the owner holds, for a settings page.
 
 > **revoke**(`ownerId`, `id`): `Promise`\<`void`\>
 
-Defined in: src/stores/postgres-grants.ts:142
+Defined in: [src/stores/postgres-grants.ts:142](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres-grants.ts#L142)
 
 Revoke one of the owner's grants. A grant owned by someone else is left alone.
 
@@ -128,7 +128,7 @@ Revoke one of the owner's grants. A grant owned by someone else is left alone.
 
 > **save**(`grant`): `Promise`\<[`ToolGrant`](../interfaces/ToolGrant.md)\>
 
-Defined in: src/stores/postgres-grants.ts:120
+Defined in: [src/stores/postgres-grants.ts:120](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres-grants.ts#L120)
 
 Save a grant, replacing an identical one (same owner, agent, thread, tool, subject).
 
