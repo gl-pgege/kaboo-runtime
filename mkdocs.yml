@@ -45,6 +45,7 @@ nav:
       - NestJS: integrations/nestjs.md
       - Express: integrations/express.md
   - Troubleshooting: troubleshooting.md
+  - Upgrading: upgrading.md
   - API inventory: api-inventory.md
   - ...
   - Ecosystem: https://gl-pgege.github.io/kaboo-docs/

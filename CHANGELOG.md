@@ -6,6 +6,38 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0]
+
+See [Upgrading](docs/upgrading.md#06) for the code before and after.
+
+### Added
+
+- **`enrich`** sets the run's `forwardedProps` on the server (run tokens,
+  sessions, the caller's identity) and replaces hand-written runner wrappers.
+- **Remembered approvals (opt-in).** With `approvals.grants` (a `GrantStore`:
+  `InMemoryGrantStore`, `PostgresGrantStore` or your own) and an owner from
+  `accessPolicy.ownerOf`, "Allow for this chat" and "Always allow" answers from
+  kaboo-workflows 0.27 are saved and handed to every run as
+  `forwardedProps.kaboo_grants`. `runner.listGrants` and `runner.revokeGrant`
+  back a settings page.
+- **`approvals.onDecision`** receives the person's decisions, matched against
+  what the agent is waiting on, before the run continues; if it throws, the
+  run ends with an error and the request stays pending.
+- **Tools that enforce their own approvals.** A decision on a request a tool
+  raised itself carries the tool's `request` id, read from the stored request,
+  never from the client. It goes to `onDecision` for the tool's service and is
+  never saved as a grant.
+
+### Changed
+
+- **Breaking: stored state wins for `kaboo_session` and `kaboo_history`.** The
+  runner always takes them from the thread store (or drops them), never from
+  the browser, and always replaces a client-sent `kaboo_grants`.
+- **Breaking: replay no longer stops at an aborted run.** A stored `RUN_ERROR`
+  is replayed as `RUN_FINISHED` after closing what it left open, terminal events
+  outside any run are dropped, and recovered messages go inside the last run.
+  Hosts that patched `connect()` to do this can delete the patch.
+
 ## [0.5.2]
 
 ### Fixed

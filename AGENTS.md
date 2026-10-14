@@ -71,6 +71,9 @@ yarn examples:typecheck    # type-check examples/ against built types
 - `yarn docs:verify` green.
 - `yarn docs:llms` produces no `llms.txt` / `llms-full.txt` drift.
 - `yarn examples:typecheck` green.
+- A user-visible change (options, defaults, wire format, replay) has an entry
+  under the coming release in `docs/upgrading.md`, with the code before (in a
+  `diff` fence) and after; breaking commits carry a `BREAKING CHANGE:` footer.
 - `mkdocs build --strict` green.
 - `yarn pack --dry-run` clean (`dist` + root metadata only; no `src/`, tests,
   `docs/`, or `examples/`).

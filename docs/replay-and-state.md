@@ -35,7 +35,9 @@ it on the agent as `input.state` (persisted values first, then any incoming stat
 so an explicit caller value wins). Every app on the runtime therefore gets the
 round-trip without writing any code for it.
 
-Two things ride that channel today:
+Two things ride that channel today, and both come **only from the store**: a
+copy the browser sends is ignored, so a client cannot forge a pending approval
+or rewrite a transcript.
 
 - **`kaboo_history`** — sub-agent transcripts, so multi-agent history is seeded
   from the server rather than the browser.
@@ -43,7 +45,12 @@ Two things ride that channel today:
   an approval durable: the open gate is restored onto whichever agent serves the
   resume, so a workflows restart, a second replica, or a rebuilt session between
   the question and the answer no longer strands it with
-  `No agent session found for resume`.
+  `No agent session found for resume`. Its `approvals` list describes each open
+  approval request (`interruptId`, `tool`, `subject`, `scopes`, `input`), which
+  is what the runner matches the person's decisions against
+  ([Access control](access-control.md#remembered-approvals)).
+
+Client-staged keys such as `kaboo_references` still come from the browser.
 
 Because a paused approval now depends on this, persisting `STATE_SNAPSHOT` is a
 requirement of a store rather than a nicety — see [thread stores](thread-stores.md)
@@ -59,6 +66,13 @@ and [custom store](custom-store.md).
 
 This is what lets a browser reload — or a second tab — rebuild the full
 transcript and then continue watching live work.
+
+The stored part is made safe for an AG-UI client first. The client accepts
+nothing after a run's `RUN_ERROR`, so a run that failed or was aborted (the
+client aborts a run to send a new message) replays as finished — after closing
+any message or tool call it left open — and the turns after it stay visible.
+A terminal event outside any run is dropped, and messages the log lost are
+replayed inside the last run rather than after it.
 
 ## Warming the index after a cold start
 

@@ -9,7 +9,24 @@ import {
   type LocalThreadEndpointRecord,
 } from "@copilotkit/runtime/v2";
 import { EventType, type AbstractAgent, type BaseEvent, type Message, type RunAgentInput } from "@ag-ui/client";
+import {
+  KABOO_GRANTS_PROP,
+  resolveApprovalDecisions,
+  type KabooApprovalOptions,
+  type KabooRunContext,
+  type ToolGrant,
+} from "./approvals";
+import { replayableLog, withinLastRun } from "./replay";
 import type { ThreadStore } from "./store";
+
+/**
+ * State keys kaboo-workflows writes and only the store may supply: pending
+ * interrupts (`kaboo_session`) and sub-agent transcripts (`kaboo_history`). A
+ * browser-sent copy is never used, so a client cannot forge a pending
+ * approval or a transcript. Client-staged keys such as `kaboo_references`
+ * still come from the browser.
+ */
+const SERVER_STATE_KEYS = ["kaboo_session", "kaboo_history"] as const;
 
 /**
  * Name of the `CUSTOM` event the runner emits (and persists) once per new
@@ -252,6 +269,18 @@ export interface KabooRunnerOptions {
   onStoreError?: (error: unknown, context: { threadId: string; op: string }) => void;
   /** Ownership hooks — see {@link KabooAccessPolicy}. */
   accessPolicy?: KabooAccessPolicy;
+  /**
+   * Build the run's `forwardedProps` from values the host vouches for —
+   * run-scoped credentials, the tenant, a composed workflow. The returned
+   * object replaces the client's `forwardedProps` (start from
+   * `context.input.forwardedProps` to keep client values), so a client cannot
+   * smuggle in what only the host may set. Awaited before the run starts; if
+   * it throws, the run ends with an error. `kaboo_grants` is always set by the
+   * runner, never taken from here or the client.
+   */
+  enrich?: (context: KabooRunContext) => Record<string, unknown> | Promise<Record<string, unknown>>;
+  /** Remembered tool approvals — see {@link KabooApprovalOptions}. */
+  approvals?: KabooApprovalOptions;
 }
 
 interface ThreadRuntime {
@@ -373,6 +402,10 @@ export class KabooAgentRunner extends AgentRunner {
   /**
    * Merge the thread's persisted state under the caller's for this run.
    *
+   * The caller's state wins for ordinary keys, but the {@link SERVER_STATE_KEYS}
+   * come only from the store: a browser-sent `kaboo_session` could otherwise
+   * forge a pending approval with input the agent never proposed.
+   *
    * The merged state is written back onto the *agent*, not just the returned
    * input. `AbstractAgent.prepareRunAgentInput` builds the wire payload from
    * `this.state` and ignores `input.state` entirely, so setting the field alone
@@ -384,13 +417,76 @@ export class KabooAgentRunner extends AgentRunner {
     input: RunAgentInput,
     persisted: Record<string, unknown> | null,
   ): RunAgentInput {
-    if (!persisted) return input;
     const inputState = input.state && typeof input.state === "object" ? input.state : {};
-    const merged = { ...persisted, ...(inputState as Record<string, unknown>) };
+    const merged: Record<string, unknown> = { ...(persisted ?? {}), ...(inputState as Record<string, unknown>) };
+    for (const key of SERVER_STATE_KEYS) {
+      if (persisted && key in persisted) merged[key] = persisted[key];
+      else delete merged[key];
+    }
     // Guarded because the runner accepts whatever CopilotKit hands it, which may
     // be a duck-typed agent that reads `input.state` instead.
     if (typeof agent.setState === "function") agent.setState(merged);
     return { ...input, state: merged };
+  }
+
+  /**
+   * Settle what the run carries before the agent sees it: the host's
+   * `forwardedProps` ({@link KabooRunnerOptions.enrich}), the person's
+   * approval decisions (saved as grants, then handed to
+   * {@link KabooApprovalOptions.onDecision}), and the permissions the agent
+   * may use (`kaboo_grants`, replacing anything the client sent).
+   */
+  private async prepareInput(
+    threadId: string,
+    record: ThreadRuntime,
+    input: RunAgentInput,
+    persisted: Record<string, unknown> | null,
+  ): Promise<RunAgentInput> {
+    const context: KabooRunContext = {
+      threadId,
+      agentId: record.agentId,
+      ownerId: record.ownerId,
+      input,
+    };
+    const clientProps =
+      input.forwardedProps && typeof input.forwardedProps === "object"
+        ? (input.forwardedProps as Record<string, unknown>)
+        : {};
+    const forwardedProps: Record<string, unknown> = {
+      ...(this.options.enrich ? await this.options.enrich(context) : clientProps),
+    };
+    delete forwardedProps[KABOO_GRANTS_PROP];
+
+    const approvals = this.options.approvals;
+    if (approvals) {
+      const decisions = resolveApprovalDecisions(input.resume, persisted);
+      const grants = approvals.grants;
+      if (grants && record.ownerId) {
+        for (const d of decisions) {
+          if (d.decision !== "approved" || d.scope === "once" || d.request) continue;
+          await grants.save({
+            ownerId: record.ownerId,
+            agentId: record.agentId,
+            threadId: d.scope === "thread" ? threadId : null,
+            tool: d.tool,
+            subject: d.subject.key,
+            label: d.subject.label,
+          });
+        }
+      }
+      if (decisions.length > 0 && approvals.onDecision) {
+        await approvals.onDecision(decisions, context);
+      }
+      if (grants && record.ownerId) {
+        const held = await grants.list({ ownerId: record.ownerId, agentId: record.agentId, threadId });
+        forwardedProps[KABOO_GRANTS_PROP] = held.map((g) => ({
+          tool: g.tool,
+          subject: g.subject,
+          scope: g.threadId === null ? "always" : "thread",
+        }));
+      }
+    }
+    return { ...input, forwardedProps };
   }
 
   private reportStoreError(error: unknown, threadId: string, op: string): void {
@@ -473,7 +569,8 @@ export class KabooAgentRunner extends AgentRunner {
       try {
         await this.hydrateThread(threadId);
         const persisted = record.state ?? (await this.store.readState(threadId));
-        const mergedInput = this.injectState(agent, input, persisted);
+        const prepared = await this.prepareInput(threadId, record, input, persisted);
+        const mergedInput = this.injectState(agent, prepared, persisted);
         // Message-meta events trail the agent's first event (RUN_STARTED)
         // rather than leading it: AG-UI clients validate that a run's stream
         // opens with RUN_STARTED, so leading CUSTOM events would be rejected.
@@ -554,10 +651,11 @@ export class KabooAgentRunner extends AgentRunner {
             try {
               const stored = await this.store.readEvents(threadId);
               if (cancelled) return;
-              for (const event of stored) subscriber.next(event);
               // Same tick as the subscription below, so nothing can interleave:
               // the store + unpersisted tail + live feed join up gap-free.
-              for (const event of run.unpersisted) subscriber.next(event);
+              for (const event of replayableLog([...stored, ...run.unpersisted], threadId)) {
+                subscriber.next(event);
+              }
               liveSub = run.live.subscribe({
                 next: (event) => subscriber.next(event),
                 error: (error) => subscriber.error(error),
@@ -569,11 +667,11 @@ export class KabooAgentRunner extends AgentRunner {
           } else {
             const stored = await this.store.readEvents(threadId);
             if (cancelled) return;
-            for (const event of stored) subscriber.next(event);
-            for (const event of this.sealDanglingRun(threadId, stored)) subscriber.next(event);
+            const sealed = this.sealDanglingRun(threadId, stored);
             const reconciled = await this.reconcileLostMessages(threadId, stored);
             if (cancelled) return;
-            for (const event of reconciled) subscriber.next(event);
+            const replay = withinLastRun(replayableLog([...stored, ...sealed], threadId), reconciled, threadId);
+            for (const event of replay) subscriber.next(event);
             subscriber.complete();
           }
         } catch (error) {
@@ -630,7 +728,8 @@ export class KabooAgentRunner extends AgentRunner {
    * persisted even on failure — still holds the run's input messages. A replay
    * of such a log renders the conversation without those messages. When the
    * snapshot contains message ids the log never materializes, close the replay
-   * with a `MESSAGES_SNAPSHOT` so the client shows the full conversation.
+   * with a `MESSAGES_SNAPSHOT` (placed inside the last run, see
+   * `withinLastRun`) so the client shows the full conversation.
    * No-op (and zero risk) when the log already covers every snapshot message.
    */
   private async reconcileLostMessages(threadId: string, stored: BaseEvent[]): Promise<BaseEvent[]> {
@@ -765,6 +864,30 @@ export class KabooAgentRunner extends AgentRunner {
    */
   getThreadState(threadId: string): Record<string, unknown> | null {
     return this.cache.get(threadId)?.state ?? null;
+  }
+
+  /**
+   * List the approvals an owner has remembered, newest first, for a settings
+   * page. Empty when no {@link KabooApprovalOptions.grants | grant store} is
+   * configured.
+   *
+   * @param ownerId - The owner, as `accessPolicy.ownerOf` reports it.
+   * @returns The owner's grants across agents and threads.
+   */
+  async listGrants(ownerId: string): Promise<ToolGrant[]> {
+    const grants = this.options.approvals?.grants;
+    return grants ? grants.listForOwner(ownerId) : [];
+  }
+
+  /**
+   * Revoke one of the owner's remembered approvals. Later calls of that tool
+   * ask again. A no-op without a grant store, or for a grant someone else owns.
+   *
+   * @param ownerId - The owner, as `accessPolicy.ownerOf` reports it.
+   * @param id - The grant's id, from {@link KabooAgentRunner.listGrants}.
+   */
+  async revokeGrant(ownerId: string, id: string): Promise<void> {
+    await this.options.approvals?.grants?.revoke(ownerId, id);
   }
 
   /**

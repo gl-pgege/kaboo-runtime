@@ -23,8 +23,13 @@ already mount CopilotKit with.
 - **Replay on reload** — reconnecting a thread replays stored turns, then tees
   any in-flight run.
 - **Server-owned history** — each run's persisted state (including
-  kaboo-workflows' `kaboo_history`) is injected into `input.state`, so the
-  browser is no longer the source of truth.
+  kaboo-workflows' `kaboo_history` and pending approvals in `kaboo_session`)
+  is injected into `input.state`, and the browser can never override those
+  keys.
+- **Server-vouched props** — `enrich` stamps the run's `forwardedProps`
+  (tokens, tenant, workflow) on the server.
+- **Remembered approvals** — with a `GrantStore`, "Allow for this chat" and
+  "Always allow" decisions are saved and handed to every run.
 - **Pluggable store** — implement the `ThreadStore` interface for any database;
   `InMemoryThreadStore` and `PostgresThreadStore` ship out of the box.
 - **Framework-agnostic** — no Express/Nest coupling; drop it into
@@ -91,6 +96,9 @@ across restarts — the store auto-creates its own tables on first use.
 - [Replay & state](./docs/replay-and-state.md)
 - [NestJS integration](./docs/integrations/nestjs.md)
 - [Express integration](./docs/integrations/express.md)
+- [Access control and remembered approvals](./docs/access-control.md)
+- [Server-side props](./docs/server-side-props.md)
+- [Upgrading](./docs/upgrading.md)
 
 ## API reference
 

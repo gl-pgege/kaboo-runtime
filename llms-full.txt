@@ -25,8 +25,13 @@ already mount CopilotKit with.
 - **Replay on reload** — reconnecting a thread replays stored turns, then tees
   any in-flight run.
 - **Server-owned history** — each run's persisted state (including
-  kaboo-workflows' `kaboo_history`) is injected into `input.state`, so the
-  browser is no longer the source of truth.
+  kaboo-workflows' `kaboo_history` and pending approvals in `kaboo_session`)
+  is injected into `input.state`, and the browser can never override those
+  keys.
+- **Server-vouched props** — `enrich` stamps the run's `forwardedProps`
+  (tokens, tenant, workflow) on the server.
+- **Remembered approvals** — with a `GrantStore`, "Allow for this chat" and
+  "Always allow" decisions are saved and handed to every run.
 - **Pluggable store** — implement the `ThreadStore` interface for any database;
   `InMemoryThreadStore` and `PostgresThreadStore` ship out of the box.
 - **Framework-agnostic** — no Express/Nest coupling; drop it into
@@ -93,6 +98,9 @@ across restarts — the store auto-creates its own tables on first use.
 - [Replay & state](./docs/replay-and-state.md)
 - [NestJS integration](./docs/integrations/nestjs.md)
 - [Express integration](./docs/integrations/express.md)
+- [Access control and remembered approvals](./docs/access-control.md)
+- [Server-side props](./docs/server-side-props.md)
+- [Upgrading](./docs/upgrading.md)
 
 ## API reference
 
@@ -713,6 +721,109 @@ Sharing semantics beyond "owner" (teams, roles, work-item collaborators) are
 host concerns by design: the runner gives you the data point, your app decides
 the policy.
 
+## Remembered approvals
+
+An agent built with kaboo-workflows can offer "Allow for this chat" and "Always
+allow" on a tool approval. Remembering the decision is the host's job, and the
+runner does it when you give it a grant store. Decisions belong to the thread's
+owner, so remembering needs `accessPolicy.ownerOf`:
+
+```ts
+import { Pool } from "pg";
+import {
+  createKabooRunner,
+  PostgresGrantStore,
+  PostgresThreadStore,
+  type ApprovalDecision,
+} from "@pgege/kaboo-runtime";
+
+declare function audit(decisions: ApprovalDecision[], ownerId: string | null): Promise<void>;
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const runner = createKabooRunner(new PostgresThreadStore({ pool }), {
+  accessPolicy: { ownerOf: (threadId) => threadId.split(":")[0] ?? null },
+  approvals: {
+    grants: new PostgresGrantStore({ pool }),
+    onDecision: async (decisions, { ownerId }) => audit(decisions, ownerId),
+  },
+});
+```
+
+Before each run the runner:
+
+1. Matches the run's `resume` answers against the approvals the agent is
+   waiting on (`kaboo_session.approvals` in the stored state). Answers to
+   anything else are ignored, and a scope the request did not offer is
+   narrowed to `once`.
+2. Saves "Allow for this chat" (this thread) and "Always allow" (every thread
+   of the owner with this agent) as grants.
+3. Awaits `onDecision` with the matched decisions — `approved`, `denied` (with
+   the person's reason), `skipped` or `expired` — for audit, or to register the
+   approval with a service that enforces it. If it throws, the run ends with an
+   error and the requests stay pending.
+4. Sends the owner's grants to the agent as `forwardedProps.kaboo_grants`,
+   which is also how the agent knows it may offer the wider scopes.
+
+Without a grant store, or without an owner, nothing is remembered and the agent
+offers only "Approve". `InMemoryGrantStore` suits development; implement
+`GrantStore` to keep grants where your app enforces them.
+
+For a settings page, `runner.listGrants(ownerId)` lists an owner's grants and
+`runner.revokeGrant(ownerId, id)` revokes one; a grant owned by someone else is
+never touched.
+
+## Tools that enforce their own approvals
+
+Some tools ask for approval themselves: their service decides what a call
+needs, refuses it with a `kaboo_approval` reply, and kaboo-workflows
+(`interrupt.tool_approvals`) pauses the run for the person. The service
+remembers the decision, not the runner. A decision on such a request carries
+the tool's `request` id; hand it to that service in `onDecision`:
+
+```ts
+import { createKabooRunner, InMemoryThreadStore, type ApprovalDecision } from "@pgege/kaboo-runtime";
+
+interface ApprovalService {
+  decide(request: string, decision: ApprovalDecision, ownerId: string | null): Promise<void>;
+}
+declare function serviceFor(tool: string): ApprovalService | null;
+
+const runner = createKabooRunner(new InMemoryThreadStore(), {
+  accessPolicy: { ownerOf: (threadId) => threadId.split(":")[0] ?? null },
+  approvals: {
+    onDecision: async (decisions, { ownerId }) => {
+      for (const decision of decisions) {
+        if (!decision.request) continue;
+        await serviceFor(decision.tool)?.decide(decision.request, decision, ownerId);
+      }
+    },
+  },
+});
+```
+
+What the runner guarantees:
+
+- **`request` comes from the agent:** it is read from the request stored in
+  `kaboo_session`, which comes only from the thread store. A `request` the
+  browser sends in a resume payload is ignored.
+- **Not a grant:** a decision with a `request` is never saved in the grant
+  store, whatever its scope.
+- **Only the owner answers:** with an access policy, only the thread's owner
+  can resume it.
+
+What the host must do:
+
+- **Forward a decision only to the service whose tool asked,** matching the
+  tool's name to that service.
+- **Wait for the service to acknowledge** before the run continues. `onDecision`
+  is awaited; if it throws, the run ends with an error and the request stays
+  pending, so the person can answer again.
+
+The service has its own checklist (random IDs bound to the person,
+conversation, resource and call; decisions honoured once, only from the host):
+see kaboo-workflows'
+[Tools that enforce their own approvals](https://gl-pgege.github.io/kaboo-workflows/workflows/human-in-the-loop/#tools-that-enforce-their-own-approvals).
+
 ---
 
 # docs/replay-and-state.md
@@ -754,7 +865,9 @@ it on the agent as `input.state` (persisted values first, then any incoming stat
 so an explicit caller value wins). Every app on the runtime therefore gets the
 round-trip without writing any code for it.
 
-Two things ride that channel today:
+Two things ride that channel today, and both come **only from the store**: a
+copy the browser sends is ignored, so a client cannot forge a pending approval
+or rewrite a transcript.
 
 - **`kaboo_history`** — sub-agent transcripts, so multi-agent history is seeded
   from the server rather than the browser.
@@ -762,7 +875,12 @@ Two things ride that channel today:
   an approval durable: the open gate is restored onto whichever agent serves the
   resume, so a workflows restart, a second replica, or a rebuilt session between
   the question and the answer no longer strands it with
-  `No agent session found for resume`.
+  `No agent session found for resume`. Its `approvals` list describes each open
+  approval request (`interruptId`, `tool`, `subject`, `scopes`, `input`), which
+  is what the runner matches the person's decisions against
+  ([Access control](access-control.md#remembered-approvals)).
+
+Client-staged keys such as `kaboo_references` still come from the browser.
 
 Because a paused approval now depends on this, persisting `STATE_SNAPSHOT` is a
 requirement of a store rather than a nicety — see [thread stores](thread-stores.md)
@@ -778,6 +896,13 @@ and [custom store](custom-store.md).
 
 This is what lets a browser reload — or a second tab — rebuild the full
 transcript and then continue watching live work.
+
+The stored part is made safe for an AG-UI client first. The client accepts
+nothing after a run's `RUN_ERROR`, so a run that failed or was aborted (the
+client aborts a run to send a new message) replays as finished — after closing
+any message or tool call it left open — and the turns after it stay visible.
+A terminal event outside any run is dropped, and messages the log lost are
+replayed inside the last run rather than after it.
 
 ## Warming the index after a cold start
 
@@ -818,77 +943,39 @@ Anything the browser puts there is, by definition, whatever the browser felt
 like sending. Props that decide what runs or what the agent may reach belong to
 the server. This page shows where to stamp them.
 
-## The seam
+## The seam: `enrich`
 
-`KabooAgentRunner` is a CopilotKit `AgentRunner`, and so is anything you wrap it
-in. A thin decorator that fills in `request.input.forwardedProps` before
-delegating puts every run through one place — chat turns, programmatic runs, and
-resumes alike:
+Pass `enrich` to the runner. It runs before every run — chat turns,
+programmatic runs and resumes alike — and its return value **replaces** the
+client's `forwardedProps`, so keep client values by spreading
+`input.forwardedProps` first and leave out anything only the server may set:
 
 ```ts
-import { AgentRunner } from "@copilotkit/runtime/v2";
-import type {
-  AgentRunnerRunRequest,
-  AgentRunnerConnectRequest,
-  AgentRunnerIsRunningRequest,
-  AgentRunnerStopRequest,
-} from "@copilotkit/runtime/v2";
-import type { BaseEvent } from "@ag-ui/client";
-import { Observable, ReplaySubject } from "rxjs";
+import { CopilotRuntime } from "@copilotkit/runtime/v2";
+import { createKabooRunner, InMemoryThreadStore } from "@pgege/kaboo-runtime";
 
-/** Fills in the props only the server can vouch for, then delegates. */
-export class EnrichedRunner extends AgentRunner {
-  constructor(
-    private readonly inner: AgentRunner,
-    private readonly enrich: (
-      threadId: string,
-      props: Record<string, unknown>,
-    ) => Promise<Record<string, unknown>>,
-  ) {
-    super();
-  }
+declare function configForThread(threadId: string): Promise<string>;
+declare function mintRunToken(ownerId: string | null): Promise<string>;
 
-  run(request: AgentRunnerRunRequest): Observable<BaseEvent> {
-    const relay = new ReplaySubject<BaseEvent>();
-    const incoming =
-      (request.input.forwardedProps as Record<string, unknown> | undefined) ?? {};
-    void this.enrich(request.threadId, incoming)
-      .then((props) => {
-        request.input.forwardedProps = props;
-        this.inner.run(request).subscribe(relay);
-      })
-      .catch((error: unknown) => relay.error(error));
-    return relay.asObservable();
-  }
-
-  connect(request: AgentRunnerConnectRequest): Observable<BaseEvent> {
-    return this.inner.connect(request);
-  }
-
-  isRunning(request: AgentRunnerIsRunningRequest): Promise<boolean> {
-    return this.inner.isRunning(request);
-  }
-
-  stop(request: AgentRunnerStopRequest): Promise<boolean | undefined> {
-    return this.inner.stop(request);
-  }
-}
-```
-
-Mount it in place of the runner you have:
-
-```ts no-verify
-const runner = new EnrichedRunner(
-  new KabooAgentRunner(store, { accessPolicy }),
-  async (threadId, props) => ({
-    ...props,
-    workflow_config: await configForThread(threadId), // the run's YAML
-    run_token: await mintRunToken(threadId),          // scoped, short-lived
-  }),
-);
+const runner = createKabooRunner(new InMemoryThreadStore(), {
+  accessPolicy: { ownerOf: (threadId) => threadId.split(":")[0] ?? null },
+  enrich: async ({ threadId, ownerId, input }) => {
+    const { workflow_config: _ignored, ...client } =
+      (input.forwardedProps as Record<string, unknown> | undefined) ?? {};
+    return {
+      ...client,
+      workflow_config: await configForThread(threadId), // the run's YAML
+      run_token: await mintRunToken(ownerId), // scoped, short-lived
+    };
+  },
+});
 
 const runtime = new CopilotRuntime({ agents: {}, runner });
 ```
+
+`enrich` receives the thread id, the agent id, the owner (from
+`accessPolicy.ownerOf`) and the run's input. If it throws, the run ends with an
+error and the agent never runs.
 
 ## What belongs here
 
@@ -899,8 +986,16 @@ const runtime = new CopilotRuntime({ agents: {}, runner });
 | Tenant / workspace / user identity | The one fact everything else is authorized against. |
 
 Leave genuinely client-owned context — the page the user is on, a selection, a
-UI preference — on the client's `forwardedProps`. The decorator spreads the
-incoming object first, so both arrive together.
+UI preference — on the client's `forwardedProps`; spread them into the result
+as above.
+
+## One prop the runner owns
+
+`kaboo_grants` — the approvals the person remembered ("Allow for this chat",
+"Always allow") — is always set by the runner, after `enrich`, and never taken
+from the client or from `enrich`: a browser cannot grant itself a permission.
+It is sent only when the runner has a grant store; see
+[Access control](access-control.md#remembered-approvals).
 
 ## Resolving per turn, not per thread
 
@@ -1063,6 +1158,111 @@ start. Register your real agent (see
 
 ---
 
+# docs/upgrading.md
+
+# Upgrading
+
+What changes between releases that you might have to act on, with the code
+before and after. If none of a release's items apply to you, upgrading is a
+version bump.
+
+The kaboo libraries can be upgraded in any order; features that span the stack
+light up once every piece is upgraded — see
+[Upgrading the stack](https://gl-pgege.github.io/kaboo-docs/start-here/#upgrading-the-stack).
+
+## 0.6
+
+### `enrich` replaces hand-written runner wrappers
+
+**Who:** hosts that wrap the runner in their own `AgentRunner` to stamp
+`forwardedProps` (a run token, the tenant, a composed workflow) — kaboo,
+kaboo-bmo and EndofSzn all did.
+
+Pass `enrich` instead and delete the wrapper. Its return value replaces the
+client's `forwardedProps`, exactly as the wrapper's assignment did.
+
+```diff
+- class EnrichedRunner extends AgentRunner {
+-   run(request: AgentRunnerRunRequest): Observable<BaseEvent> {
+-     return new Observable((subscriber) => {
+-       void this.enrich(request.threadId, request.input).then(({ forwardedProps, state }) => {
+-         request.input.forwardedProps = forwardedProps;
+-         request.input.state = state;
+-         request.agent.setState(state);
+-         this.inner.run(request).subscribe(subscriber);
+-       });
+-     });
+-   }
+-   // ...and every other AgentRunner method, delegated
+- }
+- const runner = new EnrichedRunner(createKabooRunner(store, { accessPolicy }), enrichRun);
++ const runner = createKabooRunner(store, {
++   accessPolicy,
++   enrich: async ({ threadId, ownerId, input }) => ({
++     ...(input.forwardedProps as Record<string, unknown>),
++     projectId: projectOf(threadId),
++     runToken: await tokenFor(ownerId),
++   }),
++ });
+```
+
+Re-merging persisted state in the wrapper is no longer needed: the runner does
+it, and keeps the server-owned keys (below) from the store.
+
+### Stored state wins for `kaboo_session` and `kaboo_history`
+
+**Who:** anything that sends `kaboo_session` or `kaboo_history` from the
+browser. kaboo-react never did.
+
+A browser-sent copy of either key is now ignored; the stored copy is used, or
+none. Before, the browser's copy won, so a client could forge a pending approval
+with input the agent never proposed. Other state keys still let the caller's
+value win.
+
+### Replay no longer stops at an aborted run
+
+**Who:** hosts that patched `connect()` to rewrite historical `RUN_ERROR`s
+(kaboo-bmo and EndofSzn did); clients that relied on seeing a `RUN_ERROR` when
+replaying a thread.
+
+The AG-UI client accepts nothing after a `RUN_ERROR`, so a stored error cut a
+replayed conversation off at the first aborted turn. The runner now replays a
+stored error as `RUN_FINISHED` (after closing what it left open), drops terminal
+events outside any run, and puts recovered messages inside the last run. Delete
+the patch. Live events of an in-flight run are passed through unchanged.
+
+### Remembered approvals (new, opt-in)
+
+**Who:** apps that want "Allow for this chat" and "Always allow" on tool
+approvals from kaboo-workflows 0.27.
+
+```ts
+import { createKabooRunner, InMemoryGrantStore, InMemoryThreadStore } from "@pgege/kaboo-runtime";
+
+const runner = createKabooRunner(new InMemoryThreadStore(), {
+  accessPolicy: { ownerOf: (threadId) => threadId.split(":")[0] ?? null },
+  approvals: { grants: new InMemoryGrantStore() },
+});
+```
+
+Use `PostgresGrantStore` (its own `kaboo_tool_grants` table) or your own
+`GrantStore` in production, and `onDecision` for audit or enforcement. A
+client-sent `forwardedProps.kaboo_grants` is always replaced, with or without a
+grant store. See [Access control](access-control.md#remembered-approvals).
+
+### Tools that enforce their own approvals (new, opt-in)
+
+**Who:** apps whose tools ask for approval themselves (kaboo-workflows 0.27
+`interrupt.tool_approvals`).
+
+A decision on such a request has `request`, the tool's own id. The runner
+never saves it as a grant: forward it in `onDecision` to the service whose
+tool asked, which remembers and enforces it. Nothing changes for gated tools.
+See
+[Access control](access-control.md#tools-that-enforce-their-own-approvals).
+
+---
+
 # docs/api-inventory.md
 
 # API inventory
@@ -1074,23 +1274,40 @@ Generated by `yarn docs:api` from the TypeDoc output. Every public export of `ka
 - [`createKabooRunner`](api/functions/createKabooRunner.md)
 - [`deriveState`](api/functions/deriveState.md)
 - [`pruneSupersededActivitySnapshots`](api/functions/pruneSupersededActivitySnapshots.md)
+- [`resolveApprovalDecisions`](api/functions/resolveApprovalDecisions.md)
 
 ## Classes
 
+- [`InMemoryGrantStore`](api/classes/InMemoryGrantStore.md)
 - [`InMemoryThreadStore`](api/classes/InMemoryThreadStore.md)
 - [`KabooAgentRunner`](api/classes/KabooAgentRunner.md)
+- [`PostgresGrantStore`](api/classes/PostgresGrantStore.md)
 - [`PostgresThreadStore`](api/classes/PostgresThreadStore.md)
 
 ## Interfaces
 
+- [`ApprovalDecision`](api/interfaces/ApprovalDecision.md)
+- [`ApprovalSubject`](api/interfaces/ApprovalSubject.md)
+- [`GrantQuery`](api/interfaces/GrantQuery.md)
+- [`GrantStore`](api/interfaces/GrantStore.md)
 - [`KabooAccessPolicy`](api/interfaces/KabooAccessPolicy.md)
+- [`KabooApprovalOptions`](api/interfaces/KabooApprovalOptions.md)
+- [`KabooRunContext`](api/interfaces/KabooRunContext.md)
 - [`KabooRunnerOptions`](api/interfaces/KabooRunnerOptions.md)
 - [`ListThreadsFilter`](api/interfaces/ListThreadsFilter.md)
 - [`MessageMeta`](api/interfaces/MessageMeta.md)
+- [`PostgresGrantStoreOptions`](api/interfaces/PostgresGrantStoreOptions.md)
 - [`PostgresThreadStoreOptions`](api/interfaces/PostgresThreadStoreOptions.md)
 - [`StoredThread`](api/interfaces/StoredThread.md)
 - [`ThreadStore`](api/interfaces/ThreadStore.md)
+- [`ToolGrant`](api/interfaces/ToolGrant.md)
+
+## Type aliases
+
+- [`ApprovalScope`](api/type-aliases/ApprovalScope.md)
+- [`NewToolGrant`](api/type-aliases/NewToolGrant.md)
 
 ## Variables
 
+- [`KABOO_GRANTS_PROP`](api/variables/KABOO_GRANTS_PROP.md)
 - [`MESSAGE_META_EVENT`](api/variables/MESSAGE_META_EVENT.md)

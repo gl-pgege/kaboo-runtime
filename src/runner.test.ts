@@ -200,10 +200,10 @@ describe("KabooAgentRunner", () => {
     const replayed = await collect(new KabooAgentRunner(store).connect({ threadId: "t1" }));
     expect(replayed.map((e) => e.type)).toEqual([
       EventType.RUN_STARTED,
-      EventType.RUN_ERROR,
       EventType.MESSAGES_SNAPSHOT,
+      EventType.RUN_FINISHED,
     ]);
-    const snapshot = replayed[2] as BaseEvent & { messages: Message[] };
+    const snapshot = replayed[1] as BaseEvent & { messages: Message[] };
     expect(snapshot.messages.map((m) => m.id)).toEqual(["u1"]);
   });
 
@@ -645,26 +645,22 @@ describe("KabooAgentRunner write-behind persistence", () => {
     const runner = new KabooAgentRunner(store);
     await runner.hydrate();
 
-    const replayed = await collect(runner.connect({ threadId: "t1" }));
-    expect(replayed.map((e) => e.type)).toEqual([
+    const sealedReplay = [
       EventType.RUN_STARTED,
       EventType.TEXT_MESSAGE_START,
       EventType.TEXT_MESSAGE_CONTENT,
       EventType.TEXT_MESSAGE_END,
-      EventType.RUN_ERROR,
-    ]);
+      EventType.RUN_FINISHED,
+    ];
+    const replayed = await collect(runner.connect({ threadId: "t1" }));
+    expect(replayed.map((e) => e.type)).toEqual(sealedReplay);
 
     // The seal is persisted, so the next replay reads a well-formed log
     // directly and synthesizes nothing new.
     await settle();
+    expect((await store.readEvents("t1")).map((e) => e.type).at(-1)).toBe(EventType.RUN_ERROR);
     const again = await collect(runner.connect({ threadId: "t1" }));
-    expect(again.map((e) => e.type)).toEqual([
-      EventType.RUN_STARTED,
-      EventType.TEXT_MESSAGE_START,
-      EventType.TEXT_MESSAGE_CONTENT,
-      EventType.TEXT_MESSAGE_END,
-      EventType.RUN_ERROR,
-    ]);
+    expect(again.map((e) => e.type)).toEqual(sealedReplay);
   });
 
   it("does not seal a healthy log or an in-flight run", async () => {

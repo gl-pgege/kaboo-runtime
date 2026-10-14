@@ -37,6 +37,7 @@ const NAV = [
   { title: "NestJS integration", path: "docs/integrations/nestjs.md", url: `${PAGES}integrations/nestjs/` },
   { title: "Express integration", path: "docs/integrations/express.md", url: `${PAGES}integrations/express/` },
   { title: "Troubleshooting", path: "docs/troubleshooting.md", url: `${PAGES}troubleshooting/` },
+  { title: "Upgrading", path: "docs/upgrading.md", url: `${PAGES}upgrading/` },
   { title: "API inventory", path: "docs/api-inventory.md", url: `${PAGES}api-inventory/` },
 ];
 

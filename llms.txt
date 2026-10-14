@@ -17,6 +17,7 @@ kaboo-runtime drops a custom AgentRunner into a CopilotKit runtime that records 
 - [NestJS integration](https://gl-pgege.github.io/kaboo-runtime/integrations/nestjs/)
 - [Express integration](https://gl-pgege.github.io/kaboo-runtime/integrations/express/)
 - [Troubleshooting](https://gl-pgege.github.io/kaboo-runtime/troubleshooting/)
+- [Upgrading](https://gl-pgege.github.io/kaboo-runtime/upgrading/)
 - [API inventory](https://gl-pgege.github.io/kaboo-runtime/api-inventory/)
 
 ## API
