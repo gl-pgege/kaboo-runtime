@@ -10,6 +10,7 @@ updates:
     ignore:
       - dependency-name: "@copilotkit/*"
       - dependency-name: "@ag-ui/*"
+      - dependency-name: "rxjs"
     groups:
       minor-and-patch:
         update-types: ["minor", "patch"]
