@@ -69,11 +69,22 @@ Illustrative fragments that can't compile standalone use ```` ```ts no-verify ``
 
 ## Release flow
 
-1. Bump `version` and add a `CHANGELOG.md` entry.
-2. `yarn build && yarn test && yarn pack --dry-run` (the `prepack` gate runs the
-   full docs + tests suite).
-3. Publish only after review: `yarn npm publish` (respects
+1. Bump `version` and add a `CHANGELOG.md` entry, in the release commit, with
+   the version in its subject.
+2. Commit everything before publishing. npm records the commit you publish
+   from, so uncommitted changes would ship with no source to tag.
+3. `yarn pack --dry-run` (the `prepack` gate runs the full docs + tests
+   suite), push `main`, and wait for CI to pass.
+4. Publish only after review: `yarn npm publish` (respects
    `publishConfig.access: public`).
+5. Tag the commit you published from and push the tag:
+   `git tag vX.Y.Z && git push origin vX.Y.Z`. A release isn't done until its
+   tag is on GitHub.
+
+Dependencies: Dependabot opens weekly update PRs, but leaves CopilotKit and
+AG-UI alone. The lockfile holds the oldest versions the peer ranges support,
+and CI's `newest` job tests the newest they allow; the ranges move only in a
+release that is tested on both ends.
 
 ## Docs site
 

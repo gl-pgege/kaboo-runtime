@@ -26,3 +26,22 @@ jobs:
       - run: git diff --exit-code llms.txt llms-full.txt
       - run: yarn examples:typecheck
       - run: yarn pack --dry-run
+
+  newest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+      - run: yarn install --immutable
+      - name: Install the newest versions the peer ranges allow
+        env:
+          YARN_ENABLE_IMMUTABLE_INSTALLS: "false"
+        run: |
+          yarn up "@copilotkit/runtime@$(node -p "require('./package.json').peerDependencies['@copilotkit/runtime']")" "@ag-ui/client@$(node -p "require('./package.json').peerDependencies['@ag-ui/client']")"
+      - run: yarn build
+      - run: yarn typecheck
+      - run: yarn test

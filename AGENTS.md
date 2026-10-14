@@ -86,6 +86,8 @@ yarn examples:typecheck    # type-check examples/ against built types
   `gl-pgege/kaboo-runtime`.
 - Never plan or run a live publish; the deliverable is a dry run + the publish
   command for a human to run.
+- Never publish from uncommitted changes, and a release isn't done until its
+  `vX.Y.Z` tag is pushed on the commit it was published from.
 
 ## Related
 
