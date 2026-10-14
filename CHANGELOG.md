@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0]
+
+See [Upgrading](docs/upgrading.md#07).
+
+### Changed
+
+- **The AG-UI 1.0 generation:** `@copilotkit/runtime` 1.78 or later and
+  `@ag-ui/client` 1.x (peers `>=1.78.0 <2` and `>=1.0.2 <2`). kaboo-runtime 0.6
+  stays the release for CopilotKit 1.62 to 1.71.1.
+
+### Fixed
+
+- **`stop` with a `runId` stops only that run.** CopilotKit 1.78 names the run
+  being stopped, and a stop for a run that already finished no longer aborts
+  the thread's next one.
+
 ## [0.6.1]
 
 ### Fixed

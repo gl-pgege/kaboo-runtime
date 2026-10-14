@@ -18,7 +18,7 @@ tool's `request` id comes from the stored request, never from the payload.
 
 ### resume
 
-`object`[] \| `undefined`
+`ResumeEntry`[] \| `undefined`
 
 The run's AG-UI `resume` entries.
 

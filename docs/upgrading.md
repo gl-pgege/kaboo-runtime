@@ -8,6 +8,22 @@ The kaboo libraries can be upgraded in any order; features that span the stack
 light up once every piece is upgraded — see
 [Upgrading the stack](https://gl-pgege.github.io/kaboo-docs/start-here/#upgrading-the-stack).
 
+## 0.7
+
+**Who:** everyone. 0.7 runs on CopilotKit 1.78 or later, the AG-UI 1.0
+generation.
+
+```diff
+- "@copilotkit/runtime": ">=1.62.0 <1.71.2"
+- "@ag-ui/client": ">=0.0.57 <1"
++ "@copilotkit/runtime": ">=1.78.0 <2"
++ "@ag-ui/client": ">=1.0.2 <2"
+```
+
+Upgrade `@copilotkit/runtime` and `@ag-ui/client` with it, and the browser's
+CopilotKit packages with kaboo-react 0.11. The runner's API is unchanged. On
+CopilotKit 1.62 to 1.71.1, stay on kaboo-runtime 0.6.
+
 ## 0.6.1
 
 **Who:** anyone on CopilotKit 1.71.2 or later.

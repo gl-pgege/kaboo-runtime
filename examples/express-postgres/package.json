@@ -9,8 +9,8 @@
   },
   "dependencies": {
     "@pgege/kaboo-runtime": "file:../..",
-    "@ag-ui/client": ">=0.0.57",
-    "@copilotkit/runtime": ">=1.62.0",
+    "@ag-ui/client": ">=1.0.2",
+    "@copilotkit/runtime": ">=1.78.0",
     "express": ">=5.0.0",
     "pg": ">=8.0.0",
     "rxjs": ">=7.0.0"

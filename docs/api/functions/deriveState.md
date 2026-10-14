@@ -18,7 +18,7 @@ kaboo-workflows folds each turn's `kaboo_history` into its trailing
 
 ### events
 
-`objectOutputType`\<\{ `rawEvent`: `ZodOptional`\<`ZodAny`\>; `timestamp`: `ZodOptional`\<`ZodNumber`\>; `type`: `ZodNativeEnum`\<*typeof* `EventType`\>; \}, `ZodTypeAny`, `"passthrough"`\>[]
+`BaseEvent`[]
 
 A thread's event log, in order.
 

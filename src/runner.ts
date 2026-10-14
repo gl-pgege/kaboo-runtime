@@ -292,6 +292,7 @@ interface ThreadRuntime {
   state: Record<string, unknown> | null;
   messages: Message[];
   running: boolean;
+  runId: string | null;
   stopRequested: boolean;
   run: RunPersistence | null;
   agent: AbstractAgent | null;
@@ -379,6 +380,7 @@ export class KabooAgentRunner extends AgentRunner {
         state: null,
         messages: [],
         running: false,
+        runId: null,
         stopRequested: false,
         run: null,
         agent: null,
@@ -515,6 +517,7 @@ export class KabooAgentRunner extends AgentRunner {
       throw new Error(`Thread ${threadId} is already running`);
     }
     record.running = true;
+    record.runId = input.runId;
     record.stopRequested = false;
     record.agent = agent;
     record.agentId = agent.agentId ?? record.agentId;
@@ -777,13 +780,14 @@ export class KabooAgentRunner extends AgentRunner {
   /**
    * Request cancellation of a thread's in-flight run by aborting its agent.
    *
-   * @param request - The stop request (`threadId`).
-   * @returns `true` if a stop was initiated; `false` when nothing is running, a
-   * stop was already requested, or the abort threw.
+   * @param request - The stop request (`threadId`, and `runId` to stop only that run).
+   * @returns `true` if a stop was initiated; `false` when nothing is running,
+   * `runId` names another run, a stop was already requested, or the abort threw.
    */
   stop(request: AgentRunnerStopRequest): Promise<boolean | undefined> {
     const record = this.cache.get(request.threadId);
     if (!record || !record.running || record.stopRequested) return Promise.resolve(false);
+    if (request.runId !== undefined && record.runId !== request.runId) return Promise.resolve(false);
     const agent = record.agent;
     if (!agent) return Promise.resolve(false);
     record.stopRequested = true;

@@ -348,6 +348,20 @@ describe("KabooAgentRunner", () => {
     expect(await runner.isRunning({ threadId: "t1" })).toBe(false);
   });
 
+  it("stop with another run's id leaves the active run running", async () => {
+    const runner = new KabooAgentRunner(new InMemoryThreadStore());
+    const agent = new PausableAgent();
+    const done = collect(runner.run(runReq("t1", agent, input({ runId: "r2" }))));
+    await agent.started.promise;
+
+    expect(await runner.stop({ threadId: "t1", runId: "r1" })).toBe(false);
+    expect(agent.aborted).toBe(false);
+    expect(await runner.stop({ threadId: "t1", runId: "r2" })).toBe(true);
+    expect(agent.aborted).toBe(true);
+
+    await done;
+  });
+
   it("stop returns false for unknown and already-finished threads", async () => {
     const runner = new KabooAgentRunner(new InMemoryThreadStore());
     expect(await runner.stop({ threadId: "ghost" })).toBe(false);

@@ -4,7 +4,7 @@
 
 # Class: KabooAgentRunner
 
-Defined in: [src/runner.ts:335](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L335)
+Defined in: [src/runner.ts:336](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L336)
 
 A CopilotKit `AgentRunner` that persists the full AG-UI event log to a
 pluggable [ThreadStore](../interfaces/ThreadStore.md) and replays it verbatim on reconnect. Drop it
@@ -48,7 +48,7 @@ const runtime = new CopilotRuntime({
 
 > **new KabooAgentRunner**(`store`, `options?`): `KabooAgentRunner`
 
-Defined in: [src/runner.ts:346](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L346)
+Defined in: [src/runner.ts:347](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L347)
 
 #### Parameters
 
@@ -78,7 +78,7 @@ Optional hooks (e.g. [KabooRunnerOptions.onStoreError](../interfaces/KabooRunner
 
 > **clearThreads**(): `void`
 
-Defined in: [src/runner.ts:898](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L898)
+Defined in: [src/runner.ts:902](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L902)
 
 Clear the in-memory index and the backing store (all threads). Store errors
 are routed to [KabooRunnerOptions.onStoreError](../interfaces/KabooRunnerOptions.md#onstoreerror). Throws when the
@@ -92,9 +92,9 @@ access policy sets `allowClearAll: false`.
 
 ### connect()
 
-> **connect**(`request`): `Observable`\<`objectOutputType`\<\{ `rawEvent`: `ZodOptional`\<`ZodAny`\>; `timestamp`: `ZodOptional`\<`ZodNumber`\>; `type`: `ZodNativeEnum`\<*typeof* `EventType`\>; \}, `ZodTypeAny`, `"passthrough"`\>\>
+> **connect**(`request`): `Observable`\<`BaseEvent`\>
 
-Defined in: [src/runner.ts:640](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L640)
+Defined in: [src/runner.ts:643](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L643)
 
 Replay a thread's stored event log, then tee any in-flight run so a
 reconnecting client sees prior turns followed by live events, without
@@ -116,7 +116,7 @@ The connect request (`threadId`).
 
 #### Returns
 
-`Observable`\<`objectOutputType`\<\{ `rawEvent`: `ZodOptional`\<`ZodAny`\>; `timestamp`: `ZodOptional`\<`ZodNumber`\>; `type`: `ZodNativeEnum`\<*typeof* `EventType`\>; \}, `ZodTypeAny`, `"passthrough"`\>\>
+`Observable`\<`BaseEvent`\>
 
 An observable that emits the stored log and, if running, live events.
 
@@ -128,9 +128,9 @@ An observable that emits the stored log and, if running, live events.
 
 ### getThreadEvents()
 
-> **getThreadEvents**(`threadId`): `objectOutputType`\<\{ `rawEvent`: `ZodOptional`\<`ZodAny`\>; `timestamp`: `ZodOptional`\<`ZodNumber`\>; `type`: `ZodNativeEnum`\<*typeof* `EventType`\>; \}, `ZodTypeAny`, `"passthrough"`\>[]
+> **getThreadEvents**(`threadId`): `BaseEvent`[]
 
-Defined in: [src/runner.ts:853](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L853)
+Defined in: [src/runner.ts:857](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L857)
 
 Get the not-yet-persisted tail of a thread's in-flight run.
 
@@ -149,7 +149,7 @@ The thread to read.
 
 #### Returns
 
-`objectOutputType`\<\{ `rawEvent`: `ZodOptional`\<`ZodAny`\>; `timestamp`: `ZodOptional`\<`ZodNumber`\>; `type`: `ZodNativeEnum`\<*typeof* `EventType`\>; \}, `ZodTypeAny`, `"passthrough"`\>[]
+`BaseEvent`[]
 
 A copy of the in-flight run's unpersisted events (empty when idle).
 
@@ -157,9 +157,9 @@ A copy of the in-flight run's unpersisted events (empty when idle).
 
 ### getThreadMessages()
 
-> **getThreadMessages**(`threadId`): (\{ `content`: `string`; `encryptedValue?`: `string`; `id`: `string`; `name?`: `string`; `role`: `"developer"`; \} \| \{ `content`: `string`; `encryptedValue?`: `string`; `id`: `string`; `name?`: `string`; `role`: `"system"`; \} \| \{ `content?`: `string`; `encryptedValue?`: `string`; `id`: `string`; `name?`: `string`; `role`: `"assistant"`; `toolCalls?`: `object`[]; \} \| \{ `content`: `string` \| (\{ `text`: `string`; `type`: `"text"`; \} \| \{ `metadata?`: `unknown`; `source`: \{ `mimeType`: `string`; `type`: `"data"`; `value`: `string`; \} \| \{ `mimeType?`: `string`; `type`: `"url"`; `value`: `string`; \}; `type`: `"image"`; \} \| \{ `metadata?`: `unknown`; `source`: \{ `mimeType`: `string`; `type`: `"data"`; `value`: `string`; \} \| \{ `mimeType?`: `string`; `type`: `"url"`; `value`: `string`; \}; `type`: `"audio"`; \} \| \{ `metadata?`: `unknown`; `source`: \{ `mimeType`: `string`; `type`: `"data"`; `value`: `string`; \} \| \{ `mimeType?`: `string`; `type`: `"url"`; `value`: `string`; \}; `type`: `"video"`; \} \| \{ `metadata?`: `unknown`; `source`: \{ `mimeType`: `string`; `type`: `"data"`; `value`: `string`; \} \| \{ `mimeType?`: `string`; `type`: `"url"`; `value`: `string`; \}; `type`: `"document"`; \} \| \{ `data?`: `string`; `filename?`: `string`; `id?`: `string`; `mimeType`: `string`; `type`: `"binary"`; `url?`: `string`; \})[]; `encryptedValue?`: `string`; `id`: `string`; `name?`: `string`; `role`: `"user"`; \} \| \{ `content`: `string`; `encryptedValue?`: `string`; `error?`: `string`; `id`: `string`; `role`: `"tool"`; `toolCallId`: `string`; \} \| \{ `activityType`: `string`; `content`: `Record`\<`string`, `any`\>; `id`: `string`; `role`: `"activity"`; \} \| \{ `content`: `string`; `encryptedValue?`: `string`; `id`: `string`; `role`: `"reasoning"`; \})[]
+> **getThreadMessages**(`threadId`): `Message`[]
 
-Defined in: [src/runner.ts:838](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L838)
+Defined in: [src/runner.ts:842](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L842)
 
 Get a thread's derived message snapshot from the in-memory index.
 
@@ -173,7 +173,7 @@ The thread to read.
 
 #### Returns
 
-(\{ `content`: `string`; `encryptedValue?`: `string`; `id`: `string`; `name?`: `string`; `role`: `"developer"`; \} \| \{ `content`: `string`; `encryptedValue?`: `string`; `id`: `string`; `name?`: `string`; `role`: `"system"`; \} \| \{ `content?`: `string`; `encryptedValue?`: `string`; `id`: `string`; `name?`: `string`; `role`: `"assistant"`; `toolCalls?`: `object`[]; \} \| \{ `content`: `string` \| (\{ `text`: `string`; `type`: `"text"`; \} \| \{ `metadata?`: `unknown`; `source`: \{ `mimeType`: `string`; `type`: `"data"`; `value`: `string`; \} \| \{ `mimeType?`: `string`; `type`: `"url"`; `value`: `string`; \}; `type`: `"image"`; \} \| \{ `metadata?`: `unknown`; `source`: \{ `mimeType`: `string`; `type`: `"data"`; `value`: `string`; \} \| \{ `mimeType?`: `string`; `type`: `"url"`; `value`: `string`; \}; `type`: `"audio"`; \} \| \{ `metadata?`: `unknown`; `source`: \{ `mimeType`: `string`; `type`: `"data"`; `value`: `string`; \} \| \{ `mimeType?`: `string`; `type`: `"url"`; `value`: `string`; \}; `type`: `"video"`; \} \| \{ `metadata?`: `unknown`; `source`: \{ `mimeType`: `string`; `type`: `"data"`; `value`: `string`; \} \| \{ `mimeType?`: `string`; `type`: `"url"`; `value`: `string`; \}; `type`: `"document"`; \} \| \{ `data?`: `string`; `filename?`: `string`; `id?`: `string`; `mimeType`: `string`; `type`: `"binary"`; `url?`: `string`; \})[]; `encryptedValue?`: `string`; `id`: `string`; `name?`: `string`; `role`: `"user"`; \} \| \{ `content`: `string`; `encryptedValue?`: `string`; `error?`: `string`; `id`: `string`; `role`: `"tool"`; `toolCallId`: `string`; \} \| \{ `activityType`: `string`; `content`: `Record`\<`string`, `any`\>; `id`: `string`; `role`: `"activity"`; \} \| \{ `content`: `string`; `encryptedValue?`: `string`; `id`: `string`; `role`: `"reasoning"`; \})[]
+`Message`[]
 
 A copy of the thread's messages (empty when unknown).
 
@@ -183,7 +183,7 @@ A copy of the thread's messages (empty when unknown).
 
 > **getThreadState**(`threadId`): `Record`\<`string`, `unknown`\> \| `null`
 
-Defined in: [src/runner.ts:865](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L865)
+Defined in: [src/runner.ts:869](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L869)
 
 Get a thread's latest state (from its last `STATE_SNAPSHOT`), folded
 incrementally as runs stream and hydrated from the store on cold start.
@@ -208,7 +208,7 @@ The latest state, or `null` when unknown or never emitted.
 
 > **hydrate**(): `Promise`\<`void`\>
 
-Defined in: [src/runner.ts:359](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L359)
+Defined in: [src/runner.ts:360](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L360)
 
 Warm the in-memory index from the store so the synchronous thread-query
 methods (`listThreads`, `getThreadMessages`, ...) work after a cold start.
@@ -225,7 +225,7 @@ event log. Optional: `run`/`connect` also hydrate their own thread lazily.
 
 > **isRunning**(`request`): `Promise`\<`boolean`\>
 
-Defined in: [src/runner.ts:773](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L773)
+Defined in: [src/runner.ts:776](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L776)
 
 Report whether a thread currently has a run in flight.
 
@@ -253,7 +253,7 @@ The is-running request (`threadId`).
 
 > **listGrants**(`ownerId`): `Promise`\<[`ToolGrant`](../interfaces/ToolGrant.md)[]\>
 
-Defined in: [src/runner.ts:877](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L877)
+Defined in: [src/runner.ts:881](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L881)
 
 List the approvals an owner has remembered, newest first, for a settings
 page. Empty when no [grant store](../interfaces/KabooApprovalOptions.md#grants) is
@@ -279,7 +279,7 @@ The owner's grants across agents and threads.
 
 > **listThreads**(): `LocalThreadEndpointRecord`[]
 
-Defined in: [src/runner.ts:816](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L816)
+Defined in: [src/runner.ts:820](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L820)
 
 List threads that have at least one event, most recently updated first, as
 CopilotKit `LocalThreadEndpointRecord`s. Served synchronously from the
@@ -304,7 +304,7 @@ The thread records for CopilotKit's thread-list endpoint.
 
 > **revokeGrant**(`ownerId`, `id`): `Promise`\<`void`\>
 
-Defined in: [src/runner.ts:889](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L889)
+Defined in: [src/runner.ts:893](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L893)
 
 Revoke one of the owner's remembered approvals. Later calls of that tool
 ask again. A no-op without a grant store, or for a grant someone else owns.
@@ -331,9 +331,9 @@ The grant's id, from [KabooAgentRunner.listGrants](#listgrants).
 
 ### run()
 
-> **run**(`request`): `Observable`\<`objectOutputType`\<\{ `rawEvent`: `ZodOptional`\<`ZodAny`\>; `timestamp`: `ZodOptional`\<`ZodNumber`\>; `type`: `ZodNativeEnum`\<*typeof* `EventType`\>; \}, `ZodTypeAny`, `"passthrough"`\>\>
+> **run**(`request`): `Observable`\<`BaseEvent`\>
 
-Defined in: [src/runner.ts:511](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L511)
+Defined in: [src/runner.ts:513](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L513)
 
 Run an agent for a thread, streaming its AG-UI events. The thread's
 persisted state is injected into `input.state` first. Events are persisted
@@ -351,7 +351,7 @@ The CopilotKit run request (`threadId`, `agent`, `input`).
 
 #### Returns
 
-`Observable`\<`objectOutputType`\<\{ `rawEvent`: `ZodOptional`\<`ZodAny`\>; `timestamp`: `ZodOptional`\<`ZodNumber`\>; `type`: `ZodNativeEnum`\<*typeof* `EventType`\>; \}, `ZodTypeAny`, `"passthrough"`\>\>
+`Observable`\<`BaseEvent`\>
 
 An observable of the run's events (also mirrored to `connect`).
 
@@ -365,7 +365,7 @@ An observable of the run's events (also mirrored to `connect`).
 
 > **stop**(`request`): `Promise`\<`boolean` \| `undefined`\>
 
-Defined in: [src/runner.ts:784](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L784)
+Defined in: [src/runner.ts:787](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L787)
 
 Request cancellation of a thread's in-flight run by aborting its agent.
 
@@ -375,14 +375,14 @@ Request cancellation of a thread's in-flight run by aborting its agent.
 
 `AgentRunnerStopRequest`
 
-The stop request (`threadId`).
+The stop request (`threadId`, and `runId` to stop only that run).
 
 #### Returns
 
 `Promise`\<`boolean` \| `undefined`\>
 
-`true` if a stop was initiated; `false` when nothing is running, a
-stop was already requested, or the abort threw.
+`true` if a stop was initiated; `false` when nothing is running,
+`runId` names another run, a stop was already requested, or the abort threw.
 
 #### Overrides
 

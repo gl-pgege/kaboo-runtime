@@ -5,6 +5,7 @@
   "out": "docs/api",
   "readme": "none",
   "gitRevision": "main",
+  "displayBasePath": ".",
   "githubPages": false,
   "hideBreadcrumbs": true,
   "excludeInternal": true,

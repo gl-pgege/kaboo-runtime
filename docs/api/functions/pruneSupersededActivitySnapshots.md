@@ -4,7 +4,7 @@
 
 # Function: pruneSupersededActivitySnapshots()
 
-> **pruneSupersededActivitySnapshots**(`events`): `objectOutputType`\<\{ `rawEvent`: `ZodOptional`\<`ZodAny`\>; `timestamp`: `ZodOptional`\<`ZodNumber`\>; `type`: `ZodNativeEnum`\<*typeof* `EventType`\>; \}, `ZodTypeAny`, `"passthrough"`\>[]
+> **pruneSupersededActivitySnapshots**(`events`): `BaseEvent`[]
 
 Defined in: [src/store.ts:76](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L76)
 
@@ -17,8 +17,8 @@ All other events pass through untouched.
 
 ### events
 
-`objectOutputType`\<\{ `rawEvent`: `ZodOptional`\<`ZodAny`\>; `timestamp`: `ZodOptional`\<`ZodNumber`\>; `type`: `ZodNativeEnum`\<*typeof* `EventType`\>; \}, `ZodTypeAny`, `"passthrough"`\>[]
+`BaseEvent`[]
 
 ## Returns
 
-`objectOutputType`\<\{ `rawEvent`: `ZodOptional`\<`ZodAny`\>; `timestamp`: `ZodOptional`\<`ZodNumber`\>; `type`: `ZodNativeEnum`\<*typeof* `EventType`\>; \}, `ZodTypeAny`, `"passthrough"`\>[]
+`BaseEvent`[]
