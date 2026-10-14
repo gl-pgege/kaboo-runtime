@@ -15,7 +15,7 @@
     "url": "https://github.com/gl-pgege/kaboo-runtime/issues"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "publishConfig": {
     "access": "public"

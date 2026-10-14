@@ -15,6 +15,7 @@ See [Upgrading](docs/upgrading.md#07).
 - **The AG-UI 1.0 generation:** `@copilotkit/runtime` 1.78 or later and
   `@ag-ui/client` 1.x (peers `>=1.78.0 <2` and `>=1.0.2 <2`). kaboo-runtime 0.6
   stays the release for CopilotKit 1.62 to 1.71.1.
+- **Node 20 or later,** which CopilotKit 1.78 requires.
 
 ### Fixed
 

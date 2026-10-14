@@ -21,8 +21,9 @@ generation.
 ```
 
 Upgrade `@copilotkit/runtime` and `@ag-ui/client` with it, and the browser's
-CopilotKit packages with kaboo-react 0.11. The runner's API is unchanged. On
-CopilotKit 1.62 to 1.71.1, stay on kaboo-runtime 0.6.
+CopilotKit packages with kaboo-react 0.11. The runner's API is unchanged. The
+server needs Node 20 or later, as CopilotKit 1.78 does. On CopilotKit 1.62 to
+1.71.1, stay on kaboo-runtime 0.6.
 
 ## 0.6.1
 

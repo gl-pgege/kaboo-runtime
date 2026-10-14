@@ -119,7 +119,7 @@ of every public export is in [docs/api-inventory.md](./docs/api-inventory.md).
 
 ## Compatibility & versioning
 
-- **Node** >= 18.
+- **Node** >= 20, as CopilotKit 1.78 requires.
 - **CopilotKit** `@copilotkit/runtime` >= 1.78 (peer dep), the AG-UI 1.0
   generation; kaboo-runtime 0.6 covers CopilotKit 1.62 to 1.71.1.
   `@ag-ui/client` and `rxjs` peers; `pg` optional peer.
