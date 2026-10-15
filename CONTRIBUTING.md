@@ -73,9 +73,10 @@ Illustrative fragments that can't compile standalone use ```` ```ts no-verify ``
    the version in its subject.
 2. Commit everything before publishing. npm records the commit you publish
    from, so uncommitted changes would ship with no source to tag.
-3. `yarn pack --dry-run` (the `prepack` gate runs the full docs + tests
-   suite), push `main`, and wait for CI to pass.
-4. Publish only after review: `yarn npm publish` (respects
+3. `npm publish --dry-run` (the `prepack` gate runs the full docs + tests
+   suite, and npm lists what it would publish), push `main`, and wait for CI
+   to pass.
+4. Publish only after review: `npm publish` (respects
    `publishConfig.access: public`).
 5. Tag the commit you published from and push the tag:
    `git tag vX.Y.Z && git push origin vX.Y.Z`. A release isn't done until its

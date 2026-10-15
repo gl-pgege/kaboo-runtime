@@ -18,7 +18,7 @@ yarn examples:typecheck    # type-check examples/ against built types
 ```
 
 `prepack` runs build + docs:api + docs:llms + docs:verify + test (fires on
-`yarn pack` and `yarn npm publish`).
+`yarn pack` and `npm publish`).
 
 ## Architecture & conventions
 
