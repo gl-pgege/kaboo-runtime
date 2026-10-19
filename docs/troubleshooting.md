@@ -36,6 +36,16 @@ not the store.
 - Persistence failures never crash a run — they surface via `onStoreError`
   (default `console.error`). Wire it to your logger to see what failed.
 
+## Approval cards stay "submitted" after an answer
+
+The answer reached the runner, but `onDecision` threw (the service refused the
+decision or couldn't be reached), so the agent never ran. Before 0.7.1 the
+runner sent a bare `RUN_ERROR` without `RUN_STARTED`, which leaves CopilotKit's
+interrupt state sealed until a reload. Upgrade to 0.7.1 or later together with
+kaboo-react 0.11.2 or later: the run opens with `RUN_STARTED`, the browser shows
+the error's message and the cards come back. Then fix the refusal itself; see
+[What the host must do](access-control.md#tools-that-enforce-their-own-approvals).
+
 ## The runner replays but the agent never runs
 
 `agents: {}` means there is no agent to run — replay works but new turns can't

@@ -140,6 +140,11 @@ class RunPersistence {
     this.schedule();
   }
 
+  /** Feed live subscribers an event that must not enter the log. */
+  announce(event: BaseEvent): void {
+    this.live.next(event);
+  }
+
   private schedule(): void {
     if (this.flushing || this.pauses > 0 || this.unpersisted.length === 0) return;
     this.flushing = true;
@@ -434,8 +439,8 @@ export class KabooAgentRunner extends AgentRunner {
   /**
    * Settle what the run carries before the agent sees it: the host's
    * `forwardedProps` ({@link KabooRunnerOptions.enrich}), the person's
-   * approval decisions (saved as grants, then handed to
-   * {@link KabooApprovalOptions.onDecision}), and the permissions the agent
+   * approval decisions (handed to {@link KabooApprovalOptions.onDecision},
+   * then saved as grants once it accepts them), and the permissions the agent
    * may use (`kaboo_grants`, replacing anything the client sent).
    */
   private async prepareInput(
@@ -463,6 +468,9 @@ export class KabooAgentRunner extends AgentRunner {
     if (approvals) {
       const decisions = resolveApprovalDecisions(input.resume, persisted);
       const grants = approvals.grants;
+      if (decisions.length > 0 && approvals.onDecision) {
+        await approvals.onDecision(decisions, context);
+      }
       if (grants && record.ownerId) {
         for (const d of decisions) {
           if (d.decision !== "approved" || d.scope === "once" || d.request) continue;
@@ -475,9 +483,6 @@ export class KabooAgentRunner extends AgentRunner {
             label: d.subject.label,
           });
         }
-      }
-      if (decisions.length > 0 && approvals.onDecision) {
-        await approvals.onDecision(decisions, context);
       }
       if (grants && record.ownerId) {
         const held = await grants.list({ ownerId: record.ownerId, agentId: record.agentId, threadId });
@@ -506,6 +511,12 @@ export class KabooAgentRunner extends AgentRunner {
    * incrementally as the run streams (and dropped from memory once committed);
    * the derived message snapshot is persisted on completion. Throws if the
    * thread is already running.
+   *
+   * A run that fails before the agent emits anything (`enrich` or
+   * `onDecision` throws, the store can't be read) still opens with
+   * `RUN_STARTED` and closes with `RUN_ERROR`, as AG-UI clients expect. When
+   * that run was a resume, none of it is stored: the thread still ends on the
+   * interrupts it answered, and they stay open to be answered again.
    *
    * @param request - The CopilotKit run request (`threadId`, `agent`, `input`).
    * @returns An observable of the run's events (also mirrored to `connect`).
@@ -556,8 +567,11 @@ export class KabooAgentRunner extends AgentRunner {
     // run, without retaining the (potentially huge) events themselves.
     const shadow: BaseEvent[] = [];
     let finalizing = false;
+    let started = false;
+    let unrecorded = false;
     const accept = (event: BaseEvent) => {
       if (event.timestamp == null) event.timestamp = Date.now();
+      if (event.type === EventType.RUN_STARTED) started = true;
       if (!finalizing && LIFECYCLE_TYPES.has(event.type)) shadow.push(lifecycleShadow(event));
       if (event.type === EventType.STATE_SNAPSHOT) {
         const snapshot = (event as { snapshot?: unknown }).snapshot;
@@ -565,6 +579,11 @@ export class KabooAgentRunner extends AgentRunner {
       }
       record.hasEvents = true;
       persistence.accept(event);
+      emit(event);
+    };
+    const announce = (event: BaseEvent) => {
+      if (event.timestamp == null) event.timestamp = Date.now();
+      persistence.announce(event);
       emit(event);
     };
 
@@ -595,22 +614,28 @@ export class KabooAgentRunner extends AgentRunner {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         finalizing = true;
+        unrecorded = !started && Array.isArray(input.resume) && input.resume.length > 0;
+        const send = unrecorded ? announce : accept;
+        if (!started) send({ type: EventType.RUN_STARTED, threadId, runId: input.runId } as BaseEvent);
         for (const event of finalizeRunEvents(shadow, {
           stopRequested: record.stopRequested,
           interruptionMessage: message,
         })) {
-          accept(event);
+          send(event);
         }
       } finally {
-        const derivedMessages = Array.isArray(agent.messages) ? [...agent.messages] : record.messages;
-        record.messages = derivedMessages;
-        record.updatedAt = Date.now();
+        if (!unrecorded) {
+          record.messages = Array.isArray(agent.messages) ? [...agent.messages] : record.messages;
+          record.updatedAt = Date.now();
+        }
         record.hydrated = true;
         await persistence.drain();
-        try {
-          await this.store.saveMessages(threadId, derivedMessages);
-        } catch (error) {
-          this.reportStoreError(error, threadId, "persist");
+        if (!unrecorded) {
+          try {
+            await this.store.saveMessages(threadId, record.messages);
+          } catch (error) {
+            this.reportStoreError(error, threadId, "persist");
+          }
         }
         record.running = false;
         record.stopRequested = false;

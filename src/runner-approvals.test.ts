@@ -130,7 +130,22 @@ describe("enrich", () => {
     const events = await run(runner, agent, input());
 
     expect(agent.lastInput).toBeNull();
-    expect(events.map((e) => e.type)).toContain(EventType.RUN_ERROR);
+    expect(events.map((e) => e.type)).toEqual([EventType.RUN_STARTED, EventType.RUN_ERROR]);
+    expect(events[0]).toMatchObject({ threadId: "ann:t1", runId: "r1" });
+    expect(events[1]).toMatchObject({ message: "no verified caller" });
+  });
+
+  it("stores a run that fails before the agent starts, so its message survives a reload", async () => {
+    const store = new InMemoryThreadStore();
+    const runner = new KabooAgentRunner(store, {
+      enrich: () => {
+        throw new Error("no verified caller");
+      },
+    });
+
+    await run(runner, new FakeAgent(), input());
+
+    expect((await store.readEvents("ann:t1")).map((e) => e.type)).toEqual([EventType.RUN_STARTED, EventType.RUN_ERROR]);
   });
 
   it("strips a client-sent kaboo_grants even without approvals configured", async () => {
@@ -296,8 +311,49 @@ describe("remembered approvals", () => {
     const events = await run(runner, resumed, input(approve("once")));
 
     expect(resumed.lastInput).toBeNull();
-    expect(events.map((e) => e.type)).toContain(EventType.RUN_ERROR);
+    expect(events.map((e) => e.type)).toEqual([EventType.RUN_STARTED, EventType.RUN_ERROR]);
+    expect(events[0]).toMatchObject({ threadId: "ann:t1", runId: "r2" });
+    expect(events[1]).toMatchObject({ message: "approval service down" });
     const state = (await store.readState("ann:t1")) as { kaboo_session: { approvals: unknown[] } };
     expect(state.kaboo_session.approvals).toHaveLength(1);
+  });
+
+  it("stores nothing of a resume that fails before the agent starts, so the thread still ends on its interrupt", async () => {
+    const store = new InMemoryThreadStore();
+    const runner = new KabooAgentRunner(store, {
+      accessPolicy: { ownerOf },
+      approvals: {
+        onDecision: () => {
+          throw new Error("approval service down");
+        },
+      },
+    });
+    await run(runner, pausedOnApproval(), input());
+    const before = await store.readEvents("ann:t1");
+
+    await run(runner, new FakeAgent(), input(approve("once")));
+
+    expect(await store.readEvents("ann:t1")).toEqual(before);
+    const replay = await collect(runner.connect({ threadId: "ann:t1" }));
+    expect(replay.at(-1)).toMatchObject({ type: EventType.RUN_FINISHED, runId: "r1" });
+    expect(replay.some((e) => (e as { runId?: string }).runId === "r2")).toBe(false);
+  });
+
+  it("saves no grant when onDecision fails", async () => {
+    const grants = new InMemoryGrantStore();
+    const runner = new KabooAgentRunner(new InMemoryThreadStore(), {
+      accessPolicy: { ownerOf },
+      approvals: {
+        grants,
+        onDecision: () => {
+          throw new Error("approval service down");
+        },
+      },
+    });
+    await run(runner, pausedOnApproval(), input());
+
+    await run(runner, new FakeAgent(), input(approve("thread")));
+
+    expect(await grants.listForOwner("ann")).toEqual([]);
   });
 });

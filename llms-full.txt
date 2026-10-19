@@ -756,12 +756,13 @@ Before each run the runner:
    waiting on (`kaboo_session.approvals` in the stored state). Answers to
    anything else are ignored, and a scope the request did not offer is
    narrowed to `once`.
-2. Saves "Allow for this chat" (this thread) and "Always allow" (every thread
-   of the owner with this agent) as grants.
-3. Awaits `onDecision` with the matched decisions — `approved`, `denied` (with
+2. Awaits `onDecision` with the matched decisions — `approved`, `denied` (with
    the person's reason), `skipped` or `expired` — for audit, or to register the
-   approval with a service that enforces it. If it throws, the run ends with an
-   error and the requests stay pending.
+   approval with a service that enforces it. If it throws, nothing is saved,
+   the run ends with an error and the requests stay pending (see
+   [When a decision is refused](#when-a-decision-is-refused)).
+3. Saves "Allow for this chat" (this thread) and "Always allow" (every thread
+   of the owner with this agent) as grants.
 4. Sends the owner's grants to the agent as `forwardedProps.kaboo_grants`,
    which is also how the agent knows it may offer the wider scopes.
 
@@ -819,6 +820,21 @@ What the host must do:
 - **Wait for the service to acknowledge** before the run continues. `onDecision`
   is awaited; if it throws, the run ends with an error and the request stays
   pending, so the person can answer again.
+- **Accept every scope the request carries,** including `once`: kaboo-workflows
+  adds `once` to every request, so the person can always approve just the one
+  call.
+- **Accept a decision the service has already taken.** Answering again resends
+  every decision of that resume, including the ones the service took before
+  another was refused.
+
+## When a decision is refused
+
+If `onDecision` (or `enrich`) throws, the agent never runs. The run still opens
+with `RUN_STARTED` and closes with `RUN_ERROR`, whose `message` is the thrown
+error's, so throw a message the person can act on. Because the run was a
+resume, none of it is stored: the thread still ends on the interrupts it
+answered, which stay open, and a reconnect shows them again. kaboo-react 0.11.2
+and later show the message and bring the cards back to be answered again.
 
 The service has its own checklist (random IDs bound to the person,
 conversation, resource and call; decisions honoured once, only from the host):
@@ -1151,6 +1167,16 @@ not the store.
 - Persistence failures never crash a run — they surface via `onStoreError`
   (default `console.error`). Wire it to your logger to see what failed.
 
+## Approval cards stay "submitted" after an answer
+
+The answer reached the runner, but `onDecision` threw (the service refused the
+decision or couldn't be reached), so the agent never ran. Before 0.7.1 the
+runner sent a bare `RUN_ERROR` without `RUN_STARTED`, which leaves CopilotKit's
+interrupt state sealed until a reload. Upgrade to 0.7.1 or later together with
+kaboo-react 0.11.2 or later: the run opens with `RUN_STARTED`, the browser shows
+the error's message and the cards come back. Then fix the refusal itself; see
+[What the host must do](access-control.md#tools-that-enforce-their-own-approvals).
+
 ## The runner replays but the agent never runs
 
 `agents: {}` means there is no agent to run — replay works but new turns can't
@@ -1170,6 +1196,30 @@ version bump.
 The kaboo libraries can be upgraded in any order; features that span the stack
 light up once every piece is upgraded — see
 [Upgrading the stack](https://gl-pgege.github.io/kaboo-docs/start-here/#upgrading-the-stack).
+
+## 0.7.1
+
+**Who:** hosts whose `approvals.onDecision` or `enrich` can throw, and hosts
+with a grant store.
+
+A run that fails before the agent starts now opens with `RUN_STARTED`, so the
+browser sees a well-formed failed run instead of a sealed interrupt:
+
+```diff
++ { "type": "RUN_STARTED", "threadId": "ann:t1", "runId": "r2" }
+  { "type": "RUN_ERROR", "code": "INCOMPLETE_STREAM", "message": "approval service down" }
+```
+
+When that run is a resume, neither event is stored, so the thread still ends on
+the interrupts it answered and they can be answered again. Grants are saved
+only after `onDecision` returns, so a refused decision leaves none behind.
+
+No code changes are needed. Two things are worth checking in `onDecision`:
+
+- Throw a message the person can act on: it is what the browser shows.
+- Accept a decision the service has already taken. Answering again resends
+  every decision of that resume, including the ones taken before another was
+  refused.
 
 ## 0.7
 

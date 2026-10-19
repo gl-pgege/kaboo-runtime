@@ -6,6 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.1]
+
+See [Upgrading](docs/upgrading.md#071).
+
+### Fixed
+
+- **A run that fails before the agent starts opens with `RUN_STARTED`.** When
+  `onDecision` or `enrich` threw, the runner sent and stored a bare `RUN_ERROR`
+  with no `RUN_STARTED` or `runId`, so a browser that had just answered an
+  approval kept its interrupt state sealed until a reload. The run now opens
+  with `RUN_STARTED` and closes with `RUN_ERROR` carrying the thrown message.
+- **A resume that fails before the agent starts isn't stored.** The thread
+  still ends on the interrupts it answered, which stay open, so a reconnect
+  shows them again instead of a run without them.
+- **Grants are saved only after `onDecision` accepts the decisions.** A refused
+  "Allow for this chat" or "Always allow" no longer leaves a grant behind.
+
 ## [0.7.0]
 
 See [Upgrading](docs/upgrading.md#07).

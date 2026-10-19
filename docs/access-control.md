@@ -90,12 +90,13 @@ Before each run the runner:
    waiting on (`kaboo_session.approvals` in the stored state). Answers to
    anything else are ignored, and a scope the request did not offer is
    narrowed to `once`.
-2. Saves "Allow for this chat" (this thread) and "Always allow" (every thread
-   of the owner with this agent) as grants.
-3. Awaits `onDecision` with the matched decisions — `approved`, `denied` (with
+2. Awaits `onDecision` with the matched decisions — `approved`, `denied` (with
    the person's reason), `skipped` or `expired` — for audit, or to register the
-   approval with a service that enforces it. If it throws, the run ends with an
-   error and the requests stay pending.
+   approval with a service that enforces it. If it throws, nothing is saved,
+   the run ends with an error and the requests stay pending (see
+   [When a decision is refused](#when-a-decision-is-refused)).
+3. Saves "Allow for this chat" (this thread) and "Always allow" (every thread
+   of the owner with this agent) as grants.
 4. Sends the owner's grants to the agent as `forwardedProps.kaboo_grants`,
    which is also how the agent knows it may offer the wider scopes.
 
@@ -153,6 +154,21 @@ What the host must do:
 - **Wait for the service to acknowledge** before the run continues. `onDecision`
   is awaited; if it throws, the run ends with an error and the request stays
   pending, so the person can answer again.
+- **Accept every scope the request carries,** including `once`: kaboo-workflows
+  adds `once` to every request, so the person can always approve just the one
+  call.
+- **Accept a decision the service has already taken.** Answering again resends
+  every decision of that resume, including the ones the service took before
+  another was refused.
+
+## When a decision is refused
+
+If `onDecision` (or `enrich`) throws, the agent never runs. The run still opens
+with `RUN_STARTED` and closes with `RUN_ERROR`, whose `message` is the thrown
+error's, so throw a message the person can act on. Because the run was a
+resume, none of it is stored: the thread still ends on the interrupts it
+answered, which stay open, and a reconnect shows them again. kaboo-react 0.11.2
+and later show the message and bring the cards back to be answered again.
 
 The service has its own checklist (random IDs bound to the person,
 conversation, resource and call; decisions honoured once, only from the host):

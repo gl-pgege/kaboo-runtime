@@ -4,7 +4,7 @@
 
 # Interface: KabooAccessPolicy
 
-Defined in: [src/runner.ts:252](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L252)
+Defined in: [src/runner.ts:257](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L257)
 
 Access-control hooks for [KabooAgentRunner](../classes/KabooAgentRunner.md).
 
@@ -22,7 +22,7 @@ re-deriving ownership.
 
 > `optional` **allowClearAll?**: `boolean`
 
-Defined in: [src/runner.ts:263](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L263)
+Defined in: [src/runner.ts:268](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L268)
 
 Whether [KabooAgentRunner.clearThreads](../classes/KabooAgentRunner.md#clearthreads) (which wipes the whole
 store) is allowed. Defaults to `true` for compatibility; multi-tenant
@@ -34,7 +34,7 @@ hosts should set `false`.
 
 > `optional` **ownerOf?**: (`threadId`) => `string` \| `null`
 
-Defined in: [src/runner.ts:257](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L257)
+Defined in: [src/runner.ts:262](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L262)
 
 Resolve the owning subject for a thread (or `null` when unknown). Called
 when a run persists and when listing threads that have no recorded owner.

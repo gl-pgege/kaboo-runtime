@@ -8,6 +8,30 @@ The kaboo libraries can be upgraded in any order; features that span the stack
 light up once every piece is upgraded — see
 [Upgrading the stack](https://gl-pgege.github.io/kaboo-docs/start-here/#upgrading-the-stack).
 
+## 0.7.1
+
+**Who:** hosts whose `approvals.onDecision` or `enrich` can throw, and hosts
+with a grant store.
+
+A run that fails before the agent starts now opens with `RUN_STARTED`, so the
+browser sees a well-formed failed run instead of a sealed interrupt:
+
+```diff
++ { "type": "RUN_STARTED", "threadId": "ann:t1", "runId": "r2" }
+  { "type": "RUN_ERROR", "code": "INCOMPLETE_STREAM", "message": "approval service down" }
+```
+
+When that run is a resume, neither event is stored, so the thread still ends on
+the interrupts it answered and they can be answered again. Grants are saved
+only after `onDecision` returns, so a refused decision leaves none behind.
+
+No code changes are needed. Two things are worth checking in `onDecision`:
+
+- Throw a message the person can act on: it is what the browser shows.
+- Accept a decision the service has already taken. Answering again resends
+  every decision of that resume, including the ones taken before another was
+  refused.
+
 ## 0.7
 
 **Who:** everyone. 0.7 runs on CopilotKit 1.78 or later, the AG-UI 1.0
