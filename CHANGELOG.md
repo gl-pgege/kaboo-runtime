@@ -22,6 +22,10 @@ See [Upgrading](docs/upgrading.md#071).
   shows them again instead of a run without them.
 - **Grants are saved only after `onDecision` accepts the decisions.** A refused
   "Allow for this chat" or "Always allow" no longer leaves a grant behind.
+- **The runner builds against an app whose `@ag-ui/client` isn't CopilotKit's
+  copy.** CopilotKit 1.79 pins `@ag-ui/client` 1.0.2, so an app on 1.0.3 has
+  two copies, and the runner's own agent type no longer matched the agent
+  CopilotKit hands it. The runner now types the agent as CopilotKit gives it.
 
 ## [0.7.0]
 

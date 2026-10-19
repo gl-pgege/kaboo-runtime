@@ -8,7 +8,7 @@ import {
   type AgentRunnerStopRequest,
   type LocalThreadEndpointRecord,
 } from "@copilotkit/runtime/v2";
-import { EventType, type AbstractAgent, type BaseEvent, type Message, type RunAgentInput } from "@ag-ui/client";
+import { EventType, type BaseEvent, type Message, type RunAgentInput } from "@ag-ui/client";
 import {
   KABOO_GRANTS_PROP,
   resolveApprovalDecisions,
@@ -27,6 +27,13 @@ import type { ThreadStore } from "./store";
  * still come from the browser.
  */
 const SERVER_STATE_KEYS = ["kaboo_session", "kaboo_history"] as const;
+
+/**
+ * The agent as CopilotKit hands it over. CopilotKit pins its own
+ * `@ag-ui/client`, which can be a different copy from the app's, so the
+ * runner keeps CopilotKit's type rather than its own `AbstractAgent`.
+ */
+type RunnerAgent = AgentRunnerRunRequest["agent"];
 
 /**
  * Name of the `CUSTOM` event the runner emits (and persists) once per new
@@ -300,7 +307,7 @@ interface ThreadRuntime {
   runId: string | null;
   stopRequested: boolean;
   run: RunPersistence | null;
-  agent: AbstractAgent | null;
+  agent: RunnerAgent | null;
   createdAt: number;
   updatedAt: number;
   hydrated: boolean;
@@ -420,7 +427,7 @@ export class KabooAgentRunner extends AgentRunner {
    * left every host to replay state itself.
    */
   private injectState(
-    agent: AbstractAgent,
+    agent: RunnerAgent,
     input: RunAgentInput,
     persisted: Record<string, unknown> | null,
   ): RunAgentInput {
