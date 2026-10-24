@@ -1,4 +1,4 @@
-import type { BaseEvent, Message } from "@ag-ui/client";
+import { compactEvents, EventType, type BaseEvent, type Message } from "@ag-ui/client";
 
 /** Lightweight per-thread summary returned by {@link ThreadStore.listThreads}. */
 export interface StoredThread {
@@ -27,18 +27,15 @@ export interface ListThreadsFilter {
  * control where conversations live. `kaboo-runtime` ships `InMemoryThreadStore`
  * and `PostgresThreadStore` out of the box.
  *
- * The store persists events verbatim so `ACTIVITY_SNAPSHOT` / `CUSTOM` events
- * survive the round-trip and the full UI can be replayed — with one exception:
- * superseded `ACTIVITY_SNAPSHOT` events. Each snapshot fully replaces the
- * previous one for its message, so only the latest per message affects a
- * replay, while a long run can emit thousands of them at hundreds of KB each
- * (a single conversation reaching hundreds of MB in practice). Stores prune
- * superseded snapshots on append via
- * {@link pruneSupersededActivitySnapshots}; custom stores should do the same.
+ * Events are appended as a run streams, so a crash keeps everything up to the
+ * last write. Once a run ends, the runner asks the store to compact it
+ * ({@link ThreadStore.compactRun}): streamed deltas become single events and
+ * the run's state changes become one snapshot, with the order of everything
+ * else kept.
  */
 export interface ThreadStore {
   /**
-   * Append a completed run's events (in order) to the thread's log.
+   * Append events (in order) to the thread's log.
    *
    * `ownerId` records the owning subject on the thread (the runner passes it
    * from {@link KabooRunnerOptions.accessPolicy | accessPolicy.ownerOf}). A
@@ -50,9 +47,15 @@ export interface ThreadStore {
     events: BaseEvent[],
     ownerId?: string | null,
   ): Promise<void>;
-  /** Read the thread's full event log, verbatim and in order. */
+  /**
+   * Replace a finished run's events with {@link compactRunEvents} of them, in
+   * place: events appended after the run keep their position. A run that has
+   * not finished, or is not in the log, is left alone.
+   */
+  compactRun(threadId: string, runId: string): Promise<void>;
+  /** Read the thread's full event log, in order. */
   readEvents(threadId: string): Promise<BaseEvent[]>;
-  /** Read the latest agent state (from the last STATE_SNAPSHOT), or `null`. */
+  /** Read the latest agent state (see `deriveState`), or `null`. */
   readState(threadId: string): Promise<Record<string, unknown> | null>;
   /** Persist the derived message snapshot for a thread. */
   saveMessages(threadId: string, messages: Message[]): Promise<void>;
@@ -68,22 +71,29 @@ export interface ThreadStore {
 }
 
 /**
- * Drop `ACTIVITY_SNAPSHOT` events that a later snapshot for the same message
- * fully replaces, preserving order. A replay produces the identical final UI
- * because each snapshot carries the complete activity state for its message.
- * All other events pass through untouched.
+ * The bounds of a finished run in a log: the index of its `RUN_STARTED` and of
+ * the terminal event that closes it, or `null`.
  */
-export function pruneSupersededActivitySnapshots(events: BaseEvent[]): BaseEvent[] {
-  const lastPerMessage = new Map<unknown, number>();
-  events.forEach((event, index) => {
-    if (event.type === "ACTIVITY_SNAPSHOT") {
-      lastPerMessage.set((event as { messageId?: unknown }).messageId, index);
+export function finishedRunBounds(events: readonly BaseEvent[], runId: string): [number, number] | null {
+  for (let start = events.length - 1; start >= 0; start--) {
+    const event = events[start] as BaseEvent & { runId?: unknown };
+    if (event.type !== EventType.RUN_STARTED || event.runId !== runId) continue;
+    for (let end = start + 1; end < events.length; end++) {
+      const type = events[end].type;
+      if (type === EventType.RUN_FINISHED || type === EventType.RUN_ERROR) return [start, end];
+      if (type === EventType.RUN_STARTED) return null;
     }
-  });
-  if (lastPerMessage.size === 0) return events;
-  return events.filter(
-    (event, index) =>
-      event.type !== "ACTIVITY_SNAPSHOT" ||
-      lastPerMessage.get((event as { messageId?: unknown }).messageId) === index,
-  );
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Compact one finished run's events with AG-UI's `compactEvents`: text and
+ * tool-argument deltas joined, state changes folded into one snapshot.
+ * Returns the input when compaction would not shrink it.
+ */
+export function compactRunEvents(events: BaseEvent[]): BaseEvent[] {
+  const compacted = compactEvents(events);
+  return compacted.length < events.length ? compacted : events;
 }

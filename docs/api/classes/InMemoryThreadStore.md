@@ -40,7 +40,7 @@ const runner = createKabooRunner(new InMemoryThreadStore());
 
 Defined in: [src/stores/memory.ts:40](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/memory.ts#L40)
 
-Append a completed run's events (in order) to the thread's log.
+Append events (in order) to the thread's log.
 
 `ownerId` records the owning subject on the thread (the runner passes it
 from [accessPolicy.ownerOf](../interfaces/KabooRunnerOptions.md#accesspolicy)). A
@@ -78,7 +78,7 @@ nullish value must preserve any owner already recorded.
 
 > **clear**(`threadId?`): `Promise`\<`void`\>
 
-Defined in: [src/stores/memory.ts:90](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/memory.ts#L90)
+Defined in: [src/stores/memory.ts:97](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/memory.ts#L97)
 
 Delete one thread's data, or all threads when `threadId` is omitted.
 
@@ -98,11 +98,41 @@ Delete one thread's data, or all threads when `threadId` is omitted.
 
 ***
 
+### compactRun()
+
+> **compactRun**(`threadId`, `runId`): `Promise`\<`void`\>
+
+Defined in: [src/stores/memory.ts:53](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/memory.ts#L53)
+
+Replace a finished run's events with [compactRunEvents](../functions/compactRunEvents.md) of them, in
+place: events appended after the run keep their position. A run that has
+not finished, or is not in the log, is left alone.
+
+#### Parameters
+
+##### threadId
+
+`string`
+
+##### runId
+
+`string`
+
+#### Returns
+
+`Promise`\<`void`\>
+
+#### Implementation of
+
+[`ThreadStore`](../interfaces/ThreadStore.md).[`compactRun`](../interfaces/ThreadStore.md#compactrun)
+
+***
+
 ### listThreads()
 
 > **listThreads**(`filter?`): `Promise`\<[`StoredThread`](../interfaces/StoredThread.md)[]\>
 
-Defined in: [src/stores/memory.ts:77](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/memory.ts#L77)
+Defined in: [src/stores/memory.ts:84](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/memory.ts#L84)
 
 List persisted threads, most recently updated first. With
 `filter.ownerId`, only that subject's threads are returned.
@@ -127,9 +157,9 @@ List persisted threads, most recently updated first. With
 
 > **readEvents**(`threadId`): `Promise`\<`BaseEvent`[]\>
 
-Defined in: [src/stores/memory.ts:56](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/memory.ts#L56)
+Defined in: [src/stores/memory.ts:63](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/memory.ts#L63)
 
-Read the thread's full event log, verbatim and in order.
+Read the thread's full event log, in order.
 
 #### Parameters
 
@@ -151,7 +181,7 @@ Read the thread's full event log, verbatim and in order.
 
 > **readMessages**(`threadId`): `Promise`\<`Message`[]\>
 
-Defined in: [src/stores/memory.ts:73](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/memory.ts#L73)
+Defined in: [src/stores/memory.ts:80](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/memory.ts#L80)
 
 Read the derived message snapshot for a thread.
 
@@ -175,9 +205,9 @@ Read the derived message snapshot for a thread.
 
 > **readState**(`threadId`): `Promise`\<`Record`\<`string`, `unknown`\> \| `null`\>
 
-Defined in: [src/stores/memory.ts:60](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/memory.ts#L60)
+Defined in: [src/stores/memory.ts:67](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/memory.ts#L67)
 
-Read the latest agent state (from the last STATE_SNAPSHOT), or `null`.
+Read the latest agent state (see `deriveState`), or `null`.
 
 #### Parameters
 
@@ -199,7 +229,7 @@ Read the latest agent state (from the last STATE_SNAPSHOT), or `null`.
 
 > **saveMessages**(`threadId`, `messages`): `Promise`\<`void`\>
 
-Defined in: [src/stores/memory.ts:65](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/memory.ts#L65)
+Defined in: [src/stores/memory.ts:72](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/memory.ts#L72)
 
 Persist the derived message snapshot for a thread.
 

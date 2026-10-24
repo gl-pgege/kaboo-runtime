@@ -9,8 +9,8 @@
 Defined in: [src/approvals.ts:202](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L202)
 
 Match a run's `resume` entries against the approvals the agent is waiting
-on (`state.kaboo_session.approvals`, as persisted from the agent's own
-snapshot). Entries for anything else — questions, unknown ids — are
+on (`state.kaboo_sessions.approvals`, as persisted from the agent's own
+write-back). Entries for anything else — questions, unknown ids — are
 ignored, a scope the request did not offer is narrowed to `once`, and a
 tool's `request` id comes from the stored request, never from the payload.
 

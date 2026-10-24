@@ -357,6 +357,20 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@copilotkit/channels-core@npm:^0.11.1":
+  version: 0.11.1
+  resolution: "@copilotkit/channels-core@npm:0.11.1"
+  dependencies:
+    "@ag-ui/client": "npm:1.0.2"
+    "@ag-ui/core": "npm:1.0.2"
+    "@copilotkit/channels-ui": "npm:~0.11.1"
+    "@copilotkit/core": "npm:^1.79.1"
+    "@copilotkit/shared": "npm:^1.79.1"
+    zod-to-json-schema: "npm:^3.24.1"
+  checksum: 10c0/79ec7a3ba682cfa31a15def2f8038d6c6a9dd9d47e8bdb6be2f3b3c46bac98bb489ded8af3228d1bc3de8e8cbf4ba02029d25c20a6e7dd2992c52d3796e6e9a8
+  languageName: node
+  linkType: hard
+
 "@copilotkit/channels-intelligence@npm:0.11.0":
   version: 0.11.0
   resolution: "@copilotkit/channels-intelligence@npm:0.11.0"
@@ -372,33 +386,33 @@ __metadata:
   linkType: hard
 
 "@copilotkit/channels-slack@npm:^0.11.0":
-  version: 0.11.0
-  resolution: "@copilotkit/channels-slack@npm:0.11.0"
+  version: 0.11.1
+  resolution: "@copilotkit/channels-slack@npm:0.11.1"
   dependencies:
-    "@ag-ui/client": "npm:0.0.59"
-    "@ag-ui/core": "npm:0.0.59"
-    "@copilotkit/channels-core": "npm:^0.11.0"
-    "@copilotkit/channels-ui": "npm:^0.11.0"
-    "@copilotkit/core": "npm:^1.73.1"
-    "@copilotkit/shared": "npm:^1.73.1"
+    "@ag-ui/client": "npm:1.0.2"
+    "@ag-ui/core": "npm:1.0.2"
+    "@copilotkit/channels-core": "npm:^0.11.1"
+    "@copilotkit/channels-ui": "npm:^0.11.1"
+    "@copilotkit/core": "npm:^1.79.1"
+    "@copilotkit/shared": "npm:^1.79.1"
     "@slack/bolt": "npm:^4.2.0"
     "@slack/types": "npm:^2.21.1"
     "@slack/web-api": "npm:^7.16.0"
     rxjs: "npm:^7.8.1"
-  checksum: 10c0/0b1298fdfc00feef97f683a76935e85e32f183a0f6aa5276170787a5e7a6649745bb30b2bc09a1af5d6b2b27d65eeb79d90b77a6580d17486a5704da630e9d83
+  checksum: 10c0/be5c835777ed5e926755ad599f64b71c958aba9952bb499522115086cb3727db29cbb9bce9402099dd8535f4cc92f37688a4dc86526a57c2bbcb722e95bd9bb6
   languageName: node
   linkType: hard
 
 "@copilotkit/channels-teams@npm:^0.11.0":
-  version: 0.11.0
-  resolution: "@copilotkit/channels-teams@npm:0.11.0"
+  version: 0.11.1
+  resolution: "@copilotkit/channels-teams@npm:0.11.1"
   dependencies:
-    "@ag-ui/client": "npm:0.0.59"
-    "@ag-ui/core": "npm:0.0.59"
-    "@copilotkit/channels-core": "npm:^0.11.0"
-    "@copilotkit/channels-ui": "npm:^0.11.0"
-    "@copilotkit/core": "npm:^1.73.1"
-    "@copilotkit/shared": "npm:^1.73.1"
+    "@ag-ui/client": "npm:1.0.2"
+    "@ag-ui/core": "npm:1.0.2"
+    "@copilotkit/channels-core": "npm:^0.11.1"
+    "@copilotkit/channels-ui": "npm:^0.11.1"
+    "@copilotkit/core": "npm:^1.79.1"
+    "@copilotkit/shared": "npm:^1.79.1"
     rxjs: "npm:^7.8.1"
   peerDependencies:
     "@microsoft/agents-activity": ^1.5.3
@@ -411,11 +425,20 @@ __metadata:
       optional: true
     express:
       optional: true
-  checksum: 10c0/eda7e434d4a42617f1ff5b915c2af038a37408bc55e431e87a99936511ab0c0635d5355cf68053c4f2eb5e8c4e2eb8c96e0cb8eeb87e41f57fc5919ea2a4f635
+  checksum: 10c0/b25e1ee08969e9bad0c2d64787e8fad07da1b33a17ef114ca22d8dc027b0bd7e5b1d91df7e6b4faddf7573db08678b58cc61d2c6432b976d8f3dd3c1dd9466c3
   languageName: node
   linkType: hard
 
-"@copilotkit/channels-ui@npm:^0.11.0, @copilotkit/channels-ui@npm:~0.11.0":
+"@copilotkit/channels-ui@npm:^0.11.0, @copilotkit/channels-ui@npm:^0.11.1, @copilotkit/channels-ui@npm:~0.11.1":
+  version: 0.11.1
+  resolution: "@copilotkit/channels-ui@npm:0.11.1"
+  dependencies:
+    "@copilotkit/shared": "npm:^1.79.1"
+  checksum: 10c0/f134fa998790b58657daf10916a1e5ab99bc79cc2cdf3863a1bc9377904b5dbc29e66973fd6c9133dbde0ca0cc02c4e9773659dec6caea3b2b107c5e47cb5a9a
+  languageName: node
+  linkType: hard
+
+"@copilotkit/channels-ui@npm:~0.11.0":
   version: 0.11.0
   resolution: "@copilotkit/channels-ui@npm:0.11.0"
   dependencies:
@@ -439,7 +462,22 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@copilotkit/learning@npm:0.0.1":
+"@copilotkit/core@npm:^1.79.1":
+  version: 1.79.1
+  resolution: "@copilotkit/core@npm:1.79.1"
+  dependencies:
+    "@ag-ui/client": "npm:1.0.2"
+    "@copilotkit/learning": "npm:^0.0.1"
+    "@copilotkit/shared": "npm:1.79.1"
+    "@tanstack/pacer": "npm:^0.20.1"
+    phoenix: "npm:^1.8.4"
+    rxjs: "npm:7.8.1"
+    zod-to-json-schema: "npm:^3.24.6"
+  checksum: 10c0/e832d77a15ec6d38ec39a6b450e2e8fe999a4a7901106eb7fa82c07b011f29d86cd7e519a984ac519a6b60428ae0d8fd14faed3f7f4a9d291fc593e56c22cb2e
+  languageName: node
+  linkType: hard
+
+"@copilotkit/learning@npm:0.0.1, @copilotkit/learning@npm:^0.0.1":
   version: 0.0.1
   resolution: "@copilotkit/learning@npm:0.0.1"
   checksum: 10c0/92b792c8d6abecc404a909636ac444bf4a92049b781f5457b7689e10dc64d5008efe53d9d155ff5c8b753ab9f48cf99efe78caf54f5b8fc4f0be84ffa9994063
@@ -579,6 +617,29 @@ __metadata:
   peerDependencies:
     "@ag-ui/core": ">=0.0.48"
   checksum: 10c0/89da3bd69288efca0f157d20f45030b749a02ffa6b423e88d9d59d54a0e0453c334697f08717e79a98090f28af189ea82248df0ef538c67fe36a43ce4148cac3
+  languageName: node
+  linkType: hard
+
+"@copilotkit/shared@npm:1.79.1, @copilotkit/shared@npm:^1.79.1":
+  version: 1.79.1
+  resolution: "@copilotkit/shared@npm:1.79.1"
+  dependencies:
+    "@ag-ui/a2ui-middleware": "npm:0.0.10"
+    "@ag-ui/client": "npm:1.0.2"
+    "@copilotkit/license-verifier": "npm:~0.5.0"
+    "@segment/analytics-node": "npm:^2.1.2"
+    "@standard-schema/spec": "npm:^1.0.0"
+    chalk: "npm:4.1.2"
+    clarinet: "npm:^0.12.4"
+    graphql: "npm:^16.8.1"
+    partial-json: "npm:^0.1.7"
+    rxjs: "npm:7.8.1"
+    uuid: "npm:^11.1.0"
+    zod: "npm:^3.23.3"
+    zod-to-json-schema: "npm:^3.23.5"
+  peerDependencies:
+    "@ag-ui/core": ">=0.0.48"
+  checksum: 10c0/75218a30db8876005697d358028f9b45fd153de7bf7ff96d41d5ff2de1b9ed16aafeabc97e4f93b667b3cf9f501bb9fcfd5d3ca77212bf7e665f86d96ab2544a
   languageName: node
   linkType: hard
 
@@ -1191,6 +1252,7 @@ __metadata:
     "@types/node": "npm:^22.20.1"
     "@types/pg": "npm:^8.23.1"
     express: "npm:^5.3.0"
+    fast-json-patch: "npm:^3.1.1"
     pg: "npm:^8.23.1"
     rxjs: "npm:7.8.1"
     tsup: "npm:^9.0.0"

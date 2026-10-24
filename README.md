@@ -11,23 +11,26 @@
 
 kaboo-runtime makes the server the custodian of conversation history. It drops a
 custom `AgentRunner` into your CopilotKit runtime that records **every** AG-UI
-event verbatim to a pluggable store and replays it on reconnect — so a browser
-reload rebuilds the full transcript (messages, tools, state, and activity), not
+event to a pluggable store and replays it on reconnect — so a browser reload
+rebuilds the full transcript (messages, tools, state and sub-agent cards), not
 just the last answer. It ships no HTTP layer, so it works under any framework you
 already mount CopilotKit with.
 
 ## Features
 
-- **Verbatim event log** — the whole AG-UI run stream is persisted uncompacted,
-  so `ACTIVITY_SNAPSHOT` / `CUSTOM` events survive for a full UI replay.
+- **Event log** — the whole AG-UI run stream is persisted, each finished run
+  compacted with AG-UI's `compactEvents`, which replays to the same transcript.
 - **Replay on reload** — reconnecting a thread replays stored turns, then tees
   any in-flight run.
-- **Server-owned history** — each run's persisted state (including
-  kaboo-workflows' `kaboo_history` and pending approvals in `kaboo_session`)
-  is injected into `input.state`, and the browser can never override those
-  keys.
-- **Server-vouched props** — `enrich` stamps the run's `forwardedProps`
-  (tokens, tenant, workflow) on the server.
+- **Server-owned state** — each run's persisted state is injected into
+  `input.state`. kaboo-workflows' sessions (`kaboo_sessions`) never reach the
+  browser, its workspace (`kaboo_workspace`) reaches it read-only, and the
+  browser owns every other key.
+- **Server-vouched props and state** — `enrich` stamps the run's
+  `forwardedProps` (tokens, tenant, workflow) and server-owned state on the
+  server.
+- **MCP Apps** — an app's own requests pass through, and a run whose MCP App
+  tool was answered in-run goes on with the agent.
 - **Remembered approvals** — with a `GrantStore`, "Allow for this chat" and
   "Always allow" decisions are saved and handed to every run.
 - **Pluggable store** — implement the `ThreadStore` interface for any database;

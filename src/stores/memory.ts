@@ -1,6 +1,6 @@
 import type { BaseEvent, Message } from "@ag-ui/client";
 import type { ListThreadsFilter, StoredThread, ThreadStore } from "../store";
-import { pruneSupersededActivitySnapshots } from "../store";
+import { compactRunEvents, finishedRunBounds } from "../store";
 import { deriveState } from "../state";
 
 interface MemoryRecord {
@@ -47,10 +47,17 @@ export class InMemoryThreadStore implements ThreadStore {
     record.agentId = agentId;
     if (ownerId != null) record.ownerId = ownerId;
     record.events.push(...events);
-    if (events.some((e) => e.type === "ACTIVITY_SNAPSHOT")) {
-      record.events = pruneSupersededActivitySnapshots(record.events);
-    }
     record.updatedAt = Date.now();
+  }
+
+  async compactRun(threadId: string, runId: string): Promise<void> {
+    const record = this.threads.get(threadId);
+    const bounds = record && finishedRunBounds(record.events, runId);
+    if (!record || !bounds) return;
+    const [start, end] = bounds;
+    const run = record.events.slice(start, end + 1);
+    const compacted = compactRunEvents(run);
+    if (compacted !== run) record.events.splice(start, run.length, ...compacted);
   }
 
   async readEvents(threadId: string): Promise<BaseEvent[]> {

@@ -7,7 +7,7 @@
 Defined in: [src/approvals.ts:79](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/approvals.ts#L79)
 
 A person's answer to one approval request, matched against what the agent
-actually asked (`kaboo_session.approvals`), never against client claims.
+actually asked (`kaboo_sessions.approvals`), never against client claims.
 
 ## Properties
 

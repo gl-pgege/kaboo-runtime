@@ -4,7 +4,7 @@
 
 # Interface: PostgresThreadStoreOptions
 
-Defined in: [src/stores/postgres.ts:27](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L27)
+Defined in: [src/stores/postgres.ts:28](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L28)
 
 Options for [PostgresThreadStore](../classes/PostgresThreadStore.md). Provide exactly one connection
 source: either a `dsn` connection string (the store creates and owns its own
@@ -16,7 +16,7 @@ source: either a `dsn` connection string (the store creates and owns its own
 
 > `optional` **dsn?**: `string`
 
-Defined in: [src/stores/postgres.ts:29](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L29)
+Defined in: [src/stores/postgres.ts:30](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L30)
 
 Postgres connection string. Ignored when an existing `pool` is passed.
 
@@ -26,6 +26,6 @@ Postgres connection string. Ignored when an existing `pool` is passed.
 
 > `optional` **pool?**: `Pool`
 
-Defined in: [src/stores/postgres.ts:31](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L31)
+Defined in: [src/stores/postgres.ts:32](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L32)
 
 Reuse an existing `pg.Pool` instead of creating one from `dsn`.

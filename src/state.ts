@@ -1,14 +1,34 @@
 import { EventType, type BaseEvent } from "@ag-ui/client";
+import { applyPatch, type Operation } from "fast-json-patch";
+
+/** A thread's shared state: its top-level keys and their values. */
+export type ThreadState = Record<string, unknown>;
 
 /**
- * Derive the latest agent state from an event log by scanning backwards for the
- * last `STATE_SNAPSHOT`. Returns `null` when the thread never emitted one.
+ * Apply a `STATE_DELTA`'s JSON Patch to a state value without mutating it. A
+ * patch that does not apply leaves the state as it was.
  *
- * kaboo-workflows folds each turn's `kaboo_history` into its trailing
- * `STATE_SNAPSHOT`, so this is the authoritative per-thread state/history.
+ * @param state - The state before the delta.
+ * @param delta - The delta's JSON Patch operations.
+ * @returns The state after the delta.
+ */
+export function applyStateDelta(state: ThreadState | null, delta: unknown): ThreadState | null {
+  if (!Array.isArray(delta) || delta.length === 0) return state;
+  try {
+    const result = applyPatch(structuredClone(state ?? {}), delta as Operation[], false, false).newDocument;
+    return result && typeof result === "object" && !Array.isArray(result) ? (result as ThreadState) : state;
+  } catch {
+    return state;
+  }
+}
+
+/**
+ * Derive a thread's latest state from its event log: the last
+ * `STATE_SNAPSHOT`, with every `STATE_DELTA` after it applied. Returns `null`
+ * when the thread never emitted state.
  *
  * @param events - A thread's event log, in order.
- * @returns The last snapshot object, or `null` when there is none.
+ * @returns The latest state, or `null` when there is none.
  *
  * @example
  * ```ts
@@ -19,16 +39,23 @@ import { EventType, type BaseEvent } from "@ag-ui/client";
  * const state = deriveState(events); // Record<string, unknown> | null
  * ```
  */
-export function deriveState(events: BaseEvent[]): Record<string, unknown> | null {
+export function deriveState(events: BaseEvent[]): ThreadState | null {
+  let start = -1;
   for (let i = events.length - 1; i >= 0; i--) {
-    const event = events[i];
-    if (event.type === EventType.STATE_SNAPSHOT) {
-      const snapshot = (event as { snapshot?: unknown }).snapshot;
-      if (snapshot && typeof snapshot === "object") {
-        return snapshot as Record<string, unknown>;
-      }
-      return null;
+    if (events[i].type === EventType.STATE_SNAPSHOT) {
+      start = i;
+      break;
     }
   }
-  return null;
+  let state: ThreadState | null = null;
+  if (start >= 0) {
+    const snapshot = (events[start] as { snapshot?: unknown }).snapshot;
+    state = snapshot && typeof snapshot === "object" && !Array.isArray(snapshot) ? (snapshot as ThreadState) : null;
+  }
+  for (let i = start + 1; i < events.length; i++) {
+    if (events[i].type === EventType.STATE_DELTA) {
+      state = applyStateDelta(state, (events[i] as { delta?: unknown }).delta);
+    }
+  }
+  return state;
 }

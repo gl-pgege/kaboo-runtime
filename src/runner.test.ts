@@ -1,6 +1,8 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it, expect } from "vitest";
-import { firstValueFrom, toArray, type Observable } from "rxjs";
-import { EventType, type BaseEvent, type Message, type RunAgentInput } from "@ag-ui/client";
+import { firstValueFrom, from, toArray, type Observable } from "rxjs";
+import { EventType, verifyEvents, type BaseEvent, type Message, type RunAgentInput } from "@ag-ui/client";
 import { KabooAgentRunner, createKabooRunner, MESSAGE_META_EVENT } from "./runner";
 import { InMemoryThreadStore } from "./stores/memory";
 import type { StoredThread, ThreadStore } from "./store";
@@ -87,6 +89,9 @@ class FailingStore implements ThreadStore {
   appendEvents(): Promise<void> {
     return Promise.reject(new Error("boom"));
   }
+  compactRun(threadId: string, runId: string): Promise<void> {
+    return this.inner.compactRun(threadId, runId);
+  }
   readEvents(threadId: string): Promise<BaseEvent[]> {
     return this.inner.readEvents(threadId);
   }
@@ -139,11 +144,94 @@ class OutageStore extends InMemoryThreadStore {
   }
 }
 
-const finishedRun = (): FakeAgent =>
+const finishedRun = (runId = "r1"): FakeAgent =>
   new FakeAgent([
-    { type: EventType.RUN_STARTED, threadId: "t1", runId: "r1" } as BaseEvent,
-    { type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1" } as BaseEvent,
+    { type: EventType.RUN_STARTED, threadId: "t1", runId } as BaseEvent,
+    { type: EventType.RUN_FINISHED, threadId: "t1", runId } as BaseEvent,
   ]);
+
+class ContinuingAgent extends FakeAgent {
+  runs = 0;
+  constructor(private readonly rounds: BaseEvent[][]) {
+    super([]);
+  }
+  async runAgent(input: RunAgentInput, subscriber?: { onEvent?: (p: { event: BaseEvent }) => void }) {
+    this.lastInput = input;
+    for (const event of this.rounds[this.runs] ?? []) subscriber?.onEvent?.({ event });
+    this.runs += 1;
+    return {};
+  }
+}
+
+describe("KabooAgentRunner MCP Apps requests", () => {
+  it("lets the agent go on when the run answered the calls it ended waiting on", async () => {
+    const ev = (event: Record<string, unknown>) => event as unknown as BaseEvent;
+    const agent = new ContinuingAgent([
+      [
+        ev({ type: EventType.RUN_STARTED, threadId: "t1", runId: "r1" }),
+        ev({ type: EventType.TOOL_CALL_START, toolCallId: "c1", toolCallName: "partner_benchmarks" }),
+        ev({ type: EventType.TOOL_CALL_END, toolCallId: "c1" }),
+        ev({ type: EventType.TOOL_CALL_RESULT, messageId: "m1", toolCallId: "c1", content: "{}" }),
+        ev({ type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1", outcome: { type: "success", pendingToolCallIds: ["c1"] } }),
+      ],
+      [
+        ev({ type: EventType.RUN_STARTED, threadId: "t1", runId: "r2" }),
+        ev({ type: EventType.TEXT_MESSAGE_START, messageId: "t", role: "assistant" }),
+        ev({ type: EventType.TEXT_MESSAGE_CONTENT, messageId: "t", delta: "Above the median." }),
+        ev({ type: EventType.TEXT_MESSAGE_END, messageId: "t" }),
+        ev({ type: EventType.RUN_FINISHED, threadId: "t1", runId: "r2", outcome: { type: "success" } }),
+      ],
+    ]);
+    const runner = new KabooAgentRunner(new InMemoryThreadStore());
+
+    const emitted = await collect(runner.run(runReq("t1", agent as unknown as FakeAgent, input())));
+
+    expect(agent.runs).toBe(2);
+    expect(emitted.filter((e) => e.type === EventType.RUN_STARTED)).toHaveLength(1);
+    const finishes = emitted.filter((e) => e.type === EventType.RUN_FINISHED);
+    expect(finishes).toHaveLength(1);
+    expect(finishes[0]).toMatchObject({ runId: "r1", outcome: { type: "success" } });
+    expect(emitted.some((e) => (e as { delta?: string }).delta === "Above the median.")).toBe(true);
+  });
+
+  it("ends the run as it is when a call is still waiting for the browser", async () => {
+    const ev = (event: Record<string, unknown>) => event as unknown as BaseEvent;
+    const agent = new ContinuingAgent([
+      [
+        ev({ type: EventType.RUN_STARTED, threadId: "t1", runId: "r1" }),
+        ev({ type: EventType.TOOL_CALL_START, toolCallId: "q1", toolCallName: "ask_user" }),
+        ev({ type: EventType.TOOL_CALL_END, toolCallId: "q1" }),
+        ev({ type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1", outcome: { type: "success", pendingToolCallIds: ["q1"] } }),
+      ],
+    ]);
+    const runner = new KabooAgentRunner(new InMemoryThreadStore());
+
+    const emitted = await collect(runner.run(runReq("t1", agent as unknown as FakeAgent, input())));
+
+    expect(agent.runs).toBe(1);
+    expect(emitted.at(-1)).toMatchObject({ type: EventType.RUN_FINISHED, outcome: { pendingToolCallIds: ["q1"] } });
+  });
+
+  it("passes an MCP App's proxied request straight through, outside the thread", async () => {
+    const store = new InMemoryThreadStore();
+    let enriched = 0;
+    const runner = new KabooAgentRunner(store, { enrich: async () => (enriched++, {}) });
+    const events: BaseEvent[] = [
+      { type: EventType.RUN_STARTED, threadId: "t1", runId: "p1" } as BaseEvent,
+      { type: EventType.RUN_FINISHED, threadId: "t1", runId: "p1", result: { content: [] } } as BaseEvent,
+    ];
+    const proxied = input({
+      runId: "p1",
+      forwardedProps: { __proxiedMCPRequest: { serverId: "partner", method: "tools/call", params: {} } },
+    });
+
+    const emitted = await collect(runner.run(runReq("t1", new FakeAgent(events), proxied)));
+
+    expect(emitted.map((e) => e.type)).toEqual([EventType.RUN_STARTED, EventType.RUN_FINISHED]);
+    expect(await store.readEvents("t1")).toEqual([]);
+    expect(enriched).toBe(0);
+  });
+});
 
 describe("KabooAgentRunner", () => {
   it("emits every event and persists the full log verbatim", async () => {
@@ -187,54 +275,71 @@ describe("KabooAgentRunner", () => {
     ]);
   });
 
-  it("recovers messages the event log lost (run failed before the agent emitted)", async () => {
-    const store = new InMemoryThreadStore();
-    // A startup failure persists only RUN_STARTED / RUN_ERROR, while the
-    // message snapshot (saved even on failure) still has the user's message.
-    await store.appendEvents("t1", "test", [
-      { type: EventType.RUN_STARTED, threadId: "t1", runId: "r1" } as BaseEvent,
-      { type: EventType.RUN_ERROR, message: "invalid workflow config" } as unknown as BaseEvent,
-    ]);
-    await store.saveMessages("t1", [{ id: "u1", role: "user", content: "build a dashboard" } as Message]);
+  it("stores a recorded lab run compacted, and replays it as a stream AG-UI accepts with the same sub-agents", async () => {
+    const recorded = readFileSync(join(process.cwd(), "src/__fixtures__/delegate-dashboard.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => {
+        const { at: _at, ...event } = JSON.parse(line) as Record<string, unknown>;
+        return event as unknown as BaseEvent;
+      });
+    const { threadId, runId } = recorded[0] as unknown as { threadId: string; runId: string };
+    const runner = new KabooAgentRunner(new InMemoryThreadStore());
+    await collect(runner.run(runReq(threadId, new FakeAgent(recorded), input({ threadId, runId }))));
 
-    const replayed = await collect(new KabooAgentRunner(store).connect({ threadId: "t1" }));
-    expect(replayed.map((e) => e.type)).toEqual([
-      EventType.RUN_STARTED,
-      EventType.MESSAGES_SNAPSHOT,
-      EventType.RUN_FINISHED,
-    ]);
-    const snapshot = replayed[1] as BaseEvent & { messages: Message[] };
-    expect(snapshot.messages.map((m) => m.id)).toEqual(["u1"]);
+    const replayed = await collect(runner.connect({ threadId }));
+    await expect(firstValueFrom(from(replayed).pipe(verifyEvents(false), toArray()))).resolves.toHaveLength(replayed.length);
+    expect(replayed.length).toBeLessThan(recorded.length);
+    const subagents = (events: BaseEvent[]) =>
+      events.filter((e) => e.type === EventType.SUBAGENT_STARTED).map((e) => (e as { subagentRunId?: string }).subagentRunId);
+    expect(subagents(replayed)).toEqual(subagents(recorded));
   });
 
-  it("does not append a snapshot when the log already covers every message", async () => {
+  it("replays the message of a run that failed before the agent said anything", async () => {
     const store = new InMemoryThreadStore();
-    await store.appendEvents("t1", "test", [
-      { type: EventType.RUN_STARTED, threadId: "t1", runId: "r1" } as BaseEvent,
-      {
-        type: EventType.MESSAGES_SNAPSHOT,
-        messages: [{ id: "u1", role: "user", content: "hi" }],
-      } as unknown as BaseEvent,
-      { type: EventType.TEXT_MESSAGE_START, messageId: "a1", role: "assistant" } as unknown as BaseEvent,
-      { type: EventType.TEXT_MESSAGE_END, messageId: "a1" } as unknown as BaseEvent,
-      { type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1" } as BaseEvent,
-    ]);
-    await store.saveMessages("t1", [
-      { id: "u1", role: "user", content: "hi" } as Message,
-      { id: "a1", role: "assistant", content: "yo" } as Message,
-    ]);
+    const runner = new KabooAgentRunner(store, {
+      enrich: () => {
+        throw new Error("invalid workflow config");
+      },
+    });
+    const ask = { id: "u1", role: "user", content: "build a dashboard" } as Message;
+    await collect(runner.run(runReq("t1", new FakeAgent([]), input({ messages: [ask] }))));
 
     const replayed = await collect(new KabooAgentRunner(store).connect({ threadId: "t1" }));
-    expect(replayed.filter((e) => e.type === EventType.MESSAGES_SNAPSHOT)).toHaveLength(1);
+    expect(replayed[0]).toMatchObject({ type: EventType.RUN_STARTED, input: { messages: [ask] } });
+    expect(replayed.at(-1)).toMatchObject({ type: EventType.RUN_FINISHED });
   });
 
-  it("injects persisted state (kaboo_history) into the next run's input", async () => {
+  it("stamps RUN_STARTED with the messages the run adds, never its props or state", async () => {
+    const runner = new KabooAgentRunner(new InMemoryThreadStore());
+    const older = { id: "u1", role: "user", content: "hi" } as Message;
+    const newer = { id: "u2", role: "user", content: "and now?" } as Message;
+    const first = finishedRun();
+    first.messages = [older];
+    await collect(runner.run(runReq("t1", first, input({ messages: [older] }))));
+
+    const events = await collect(
+      runner.run(
+        runReq(
+          "t1",
+          finishedRun("r2"),
+          input({ runId: "r2", messages: [older, newer], forwardedProps: { runToken: "secret" }, state: { a: 1 } }),
+        ),
+      ),
+    );
+    const started = events[0] as BaseEvent & { input: RunAgentInput };
+    expect(started.input.messages).toEqual([newer]);
+    expect(started.input.forwardedProps).toEqual({});
+    expect(started.input.state).toEqual({});
+  });
+
+  it("injects persisted state (kaboo_sessions) into the next run's input", async () => {
     const store = new InMemoryThreadStore();
     const runner = new KabooAgentRunner(store);
 
     const firstEvents: BaseEvent[] = [
       { type: EventType.RUN_STARTED, threadId: "t1", runId: "r1" } as BaseEvent,
-      { type: EventType.STATE_SNAPSHOT, snapshot: { kaboo_history: { worker: [{ x: 1 }] } } } as unknown as BaseEvent,
+      { type: EventType.STATE_SNAPSHOT, snapshot: { kaboo_sessions: { worker: [{ x: 1 }] } } } as unknown as BaseEvent,
       { type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1" } as BaseEvent,
     ];
     await collect(runner.run(runReq("t1", new FakeAgent(firstEvents), input())));
@@ -245,13 +350,13 @@ describe("KabooAgentRunner", () => {
     ]);
     await collect(runner.run(runReq("t1", secondAgent, input({ runId: "r2" }))));
 
-    expect((secondAgent.lastInput?.state as Record<string, unknown>).kaboo_history).toEqual({
+    expect((secondAgent.lastInput?.state as Record<string, unknown>).kaboo_sessions).toEqual({
       worker: [{ x: 1 }],
     });
     // What actually goes on the wire: AbstractAgent builds its payload from the
     // agent's own state and ignores input.state, so the merge has to land here.
-    expect(secondAgent.state.kaboo_history).toEqual({ worker: [{ x: 1 }] });
-    expect(runner.getThreadState("t1")).toEqual({ kaboo_history: { worker: [{ x: 1 }] } });
+    expect(secondAgent.state.kaboo_sessions).toEqual({ worker: [{ x: 1 }] });
+    expect(runner.getThreadState("t1")).toEqual({});
   });
 
   it("replays a pending interrupt so an approval survives an agent restart", async () => {
@@ -272,8 +377,8 @@ describe("KabooAgentRunner", () => {
           new FakeAgent([
             { type: EventType.RUN_STARTED, threadId: "t1", runId: "r1" } as BaseEvent,
             {
-              type: EventType.STATE_SNAPSHOT,
-              snapshot: { kaboo_session: paused },
+              type: EventType.STATE_DELTA,
+              delta: [{ op: "add", path: "/kaboo_sessions", value: { paused } }],
             } as unknown as BaseEvent,
             { type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1" } as BaseEvent,
           ]),
@@ -290,7 +395,7 @@ describe("KabooAgentRunner", () => {
     ]);
     await collect(runner.run(runReq("t1", resumed, input({ runId: "r2" }))));
 
-    expect(resumed.state.kaboo_session).toEqual(paused);
+    expect(resumed.state.kaboo_sessions).toEqual({ paused });
   });
 
   it("lets the caller's state win over the persisted copy", async () => {
@@ -664,6 +769,7 @@ describe("KabooAgentRunner write-behind persistence", () => {
       EventType.TEXT_MESSAGE_START,
       EventType.TEXT_MESSAGE_CONTENT,
       EventType.TEXT_MESSAGE_END,
+      EventType.CUSTOM,
       EventType.RUN_FINISHED,
     ];
     const replayed = await collect(runner.connect({ threadId: "t1" }));
@@ -700,5 +806,169 @@ describe("KabooAgentRunner write-behind persistence", () => {
     const types = (await midRun).map((e) => e.type);
     expect(types.filter((t) => t === EventType.RUN_ERROR)).toHaveLength(0);
     expect(types.filter((t) => t === EventType.RUN_FINISHED)).toHaveLength(2);
+  });
+});
+
+/** An agent that, like an aborted HttpAgent, stops streaming without a terminal event. */
+class StoppableAgent {
+  agentId = "test";
+  messages: Message[] = [];
+  started = deferred();
+  private gate = deferred();
+
+  async runAgent(_input: RunAgentInput, subscriber?: { onEvent?: (p: { event: BaseEvent }) => void }) {
+    const send = (event: Record<string, unknown>) => subscriber?.onEvent?.({ event: event as unknown as BaseEvent });
+    send({ type: EventType.RUN_STARTED, threadId: "t1", runId: "r1", protocolVersion: "1.0" });
+    send({ type: EventType.TEXT_MESSAGE_START, messageId: "m1", role: "assistant" });
+    this.started.resolve();
+    await this.gate.promise;
+    return {};
+  }
+
+  abortRun() {
+    this.gate.resolve();
+  }
+}
+
+/** An agent whose client, like HttpAgent, reports an abort as a RUN_ERROR of its own. */
+class AbortReportingAgent extends StoppableAgent {
+  private report?: (event: BaseEvent) => void;
+
+  async runAgent(input: RunAgentInput, subscriber?: { onEvent?: (p: { event: BaseEvent }) => void }) {
+    this.report = (event) => subscriber?.onEvent?.({ event });
+    return super.runAgent(input, subscriber);
+  }
+
+  abortRun() {
+    this.report?.({ type: EventType.RUN_ERROR, message: "This operation was aborted", code: "abort" } as unknown as BaseEvent);
+    super.abortRun();
+  }
+}
+
+const stateEvent = (snapshot: Record<string, unknown>) =>
+  ({ type: EventType.STATE_SNAPSHOT, snapshot }) as unknown as BaseEvent;
+
+describe("KabooAgentRunner run lifecycle", () => {
+  it("ends a stopped run as cancelled, closing what it left open", async () => {
+    const runner = new KabooAgentRunner(new InMemoryThreadStore());
+    const agent = new StoppableAgent();
+    const done = collect(runner.run(runReq("t1", agent as unknown as FakeAgent, input())));
+    await agent.started.promise;
+    await runner.stop({ threadId: "t1" });
+
+    const events = await done;
+    expect(events.slice(-2).map((e) => e.type)).toEqual([EventType.TEXT_MESSAGE_END, EventType.RUN_FINISHED]);
+    expect(events.at(-1)).toMatchObject({ outcome: { type: "cancelled" } });
+  });
+
+  it("ends a stopped run as cancelled even when the client reports the abort as an error", async () => {
+    const runner = new KabooAgentRunner(new InMemoryThreadStore());
+    const agent = new AbortReportingAgent();
+    const done = collect(runner.run(runReq("t1", agent as unknown as FakeAgent, input())));
+    await agent.started.promise;
+    await runner.stop({ threadId: "t1" });
+
+    const events = await done;
+    expect(events.map((e) => e.type)).not.toContain(EventType.RUN_ERROR);
+    expect(events.at(-1)).toMatchObject({ type: EventType.RUN_FINISHED, outcome: { type: "cancelled" } });
+  });
+
+  it("compacts a finished run in the store", async () => {
+    const store = new InMemoryThreadStore();
+    const runner = new KabooAgentRunner(store);
+    await collect(
+      runner.run(
+        runReq(
+          "t1",
+          new FakeAgent([
+            { type: EventType.RUN_STARTED, threadId: "t1", runId: "r1" } as BaseEvent,
+            { type: EventType.TEXT_MESSAGE_START, messageId: "m1", role: "assistant" } as unknown as BaseEvent,
+            { type: EventType.TEXT_MESSAGE_CONTENT, messageId: "m1", delta: "Hel" } as unknown as BaseEvent,
+            { type: EventType.TEXT_MESSAGE_CONTENT, messageId: "m1", delta: "lo" } as unknown as BaseEvent,
+            { type: EventType.TEXT_MESSAGE_END, messageId: "m1" } as unknown as BaseEvent,
+            { type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1" } as BaseEvent,
+          ]),
+          input(),
+        ),
+      ),
+    );
+    await settle();
+    const stored = await store.readEvents("t1");
+    expect(stored.filter((e) => e.type === EventType.TEXT_MESSAGE_CONTENT)).toMatchObject([{ delta: "Hello" }]);
+  });
+});
+
+describe("KabooAgentRunner state ownership", () => {
+  it("never takes a server key from the browser, and lets the host set one", async () => {
+    const runner = new KabooAgentRunner(new InMemoryThreadStore(), {
+      enrich: () => ({ state: { kaboo_workspace: { focus: "d_1" } } }),
+    });
+    const agent = finishedRun();
+    await collect(
+      runner.run(
+        runReq("t1", agent, input({ state: { kaboo_workspace: { forged: true }, kaboo_sessions: { forged: true }, picked: 1 } })),
+      ),
+    );
+    expect(agent.state).toEqual({ kaboo_workspace: { focus: "d_1" }, picked: 1 });
+  });
+
+  it("keeps hidden keys from the browser, live and on replay, but stores them", async () => {
+    const store = new InMemoryThreadStore();
+    const runner = new KabooAgentRunner(store);
+    const live = await collect(
+      runner.run(
+        runReq(
+          "t1",
+          new FakeAgent([
+            { type: EventType.RUN_STARTED, threadId: "t1", runId: "r1" } as BaseEvent,
+            stateEvent({ kaboo_sessions: { lead: [1] }, kaboo_workspace: { focus: "d_1" } }),
+            { type: EventType.STATE_DELTA, delta: [{ op: "add", path: "/kaboo_sessions/analyst", value: [2] }] } as unknown as BaseEvent,
+            {
+              type: EventType.STATE_DELTA,
+              delta: [
+                { op: "add", path: "/kaboo_sessions/visualizer", value: [3] },
+                { op: "replace", path: "/kaboo_workspace/focus", value: "d_2" },
+              ],
+            } as unknown as BaseEvent,
+            { type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1" } as BaseEvent,
+          ]),
+          input(),
+        ),
+      ),
+    );
+    const replayed = await collect(runner.connect({ threadId: "t1" }));
+
+    for (const events of [live, replayed]) {
+      expect(JSON.stringify(events)).not.toContain("kaboo_sessions");
+    }
+    expect(live.filter((e) => e.type === EventType.STATE_DELTA)).toMatchObject([
+      { delta: [{ op: "replace", path: "/kaboo_workspace/focus", value: "d_2" }] },
+    ]);
+    expect(runner.getThreadState("t1")).toEqual({ kaboo_workspace: { focus: "d_2" } });
+    expect(await store.readState("t1")).toEqual({
+      kaboo_sessions: { lead: [1], analyst: [2], visualizer: [3] },
+      kaboo_workspace: { focus: "d_2" },
+    });
+  });
+
+  it("folds state deltas into the state the next run starts with", async () => {
+    const runner = new KabooAgentRunner(new InMemoryThreadStore());
+    await collect(
+      runner.run(
+        runReq(
+          "t1",
+          new FakeAgent([
+            { type: EventType.RUN_STARTED, threadId: "t1", runId: "r1" } as BaseEvent,
+            stateEvent({ kaboo_workspace: { changes: [] } }),
+            { type: EventType.STATE_DELTA, delta: [{ op: "add", path: "/kaboo_workspace/changes/-", value: "plotted w_3" }] } as unknown as BaseEvent,
+            { type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1" } as BaseEvent,
+          ]),
+          input(),
+        ),
+      ),
+    );
+    const next = finishedRun("r2");
+    await collect(runner.run(runReq("t1", next, input({ runId: "r2" }))));
+    expect(next.state).toEqual({ kaboo_workspace: { changes: ["plotted w_3"] } });
   });
 });

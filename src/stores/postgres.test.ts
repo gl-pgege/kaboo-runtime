@@ -62,26 +62,41 @@ describe.skipIf(!dsn)("PostgresThreadStore (DATABASE_URL)", () => {
     expect(await store.readEvents(tid)).toEqual([]);
   });
 
-  it("prunes superseded ACTIVITY_SNAPSHOT events on append", async () => {
-    const t = `${tid}-snap`;
-    const snap = (messageId: string, step: number): BaseEvent =>
-      ({ type: "ACTIVITY_SNAPSHOT", messageId, content: { step }, replace: true }) as unknown as BaseEvent;
-    await store.appendEvents(t, "agentA", [event(EventType.RUN_STARTED), snap("m1", 1)]);
-    await store.appendEvents(t, "agentA", [snap("m1", 2), snap("m2", 1), event(EventType.RUN_FINISHED)]);
+  it("compacts a finished run in place, ahead of the runs after it", async () => {
+    const t = `${tid}-compact`;
+    const run = (runId: string, deltas: string[]): BaseEvent[] => [
+      event(EventType.RUN_STARTED, { threadId: t, runId }),
+      event(EventType.TEXT_MESSAGE_START, { messageId: `m-${runId}`, role: "assistant" }),
+      ...deltas.map((delta) => event(EventType.TEXT_MESSAGE_CONTENT, { messageId: `m-${runId}`, delta })),
+      event(EventType.TEXT_MESSAGE_END, { messageId: `m-${runId}` }),
+      event(EventType.RUN_FINISHED, { threadId: t, runId }),
+    ];
+    await store.appendEvents(t, "agentA", run("r1", ["Hel", "lo"]));
+    await store.appendEvents(t, "agentA", run("r2", ["a", "b"]));
+
+    await store.compactRun(t, "r1");
+
     const events = await store.readEvents(t);
-    expect(events.map((e) => e.type)).toEqual([
+    expect(events.map((e) => (e as { delta?: string }).delta ?? e.type)).toEqual([
       EventType.RUN_STARTED,
-      "ACTIVITY_SNAPSHOT",
-      "ACTIVITY_SNAPSHOT",
+      EventType.TEXT_MESSAGE_START,
+      "Hello",
+      EventType.TEXT_MESSAGE_END,
       EventType.RUN_FINISHED,
+      ...run("r2", ["a", "b"]).map((e) => (e as { delta?: string }).delta ?? e.type),
     ]);
-    const snaps = events.filter((e) => e.type === "ACTIVITY_SNAPSHOT") as Array<
-      BaseEvent & { messageId: string; content: { step: number } }
-    >;
-    expect(snaps.map((s) => [s.messageId, s.content.step])).toEqual([
-      ["m1", 2],
-      ["m2", 1],
+    await store.clear(t);
+  });
+
+  it("derives state from the last snapshot and the deltas after it", async () => {
+    const t = `${tid}-delta`;
+    await store.appendEvents(t, "agentA", [
+      event(EventType.STATE_SNAPSHOT, { snapshot: { n: 1 } }),
+      event(EventType.STATE_DELTA, { delta: [{ op: "replace", path: "/n", value: 2 }] }),
+      event(EventType.STATE_DELTA, { delta: [{ op: "add", path: "/m", value: true }] }),
     ]);
+    expect(await store.readState(t)).toEqual({ n: 2, m: true });
+    await store.clear(t);
   });
 
   it("persists events whose strings contain \\u0000 and lone surrogates", async () => {

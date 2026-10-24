@@ -13,23 +13,26 @@
 
 kaboo-runtime makes the server the custodian of conversation history. It drops a
 custom `AgentRunner` into your CopilotKit runtime that records **every** AG-UI
-event verbatim to a pluggable store and replays it on reconnect — so a browser
-reload rebuilds the full transcript (messages, tools, state, and activity), not
+event to a pluggable store and replays it on reconnect — so a browser reload
+rebuilds the full transcript (messages, tools, state and sub-agent cards), not
 just the last answer. It ships no HTTP layer, so it works under any framework you
 already mount CopilotKit with.
 
 ## Features
 
-- **Verbatim event log** — the whole AG-UI run stream is persisted uncompacted,
-  so `ACTIVITY_SNAPSHOT` / `CUSTOM` events survive for a full UI replay.
+- **Event log** — the whole AG-UI run stream is persisted, each finished run
+  compacted with AG-UI's `compactEvents`, which replays to the same transcript.
 - **Replay on reload** — reconnecting a thread replays stored turns, then tees
   any in-flight run.
-- **Server-owned history** — each run's persisted state (including
-  kaboo-workflows' `kaboo_history` and pending approvals in `kaboo_session`)
-  is injected into `input.state`, and the browser can never override those
-  keys.
-- **Server-vouched props** — `enrich` stamps the run's `forwardedProps`
-  (tokens, tenant, workflow) on the server.
+- **Server-owned state** — each run's persisted state is injected into
+  `input.state`. kaboo-workflows' sessions (`kaboo_sessions`) never reach the
+  browser, its workspace (`kaboo_workspace`) reaches it read-only, and the
+  browser owns every other key.
+- **Server-vouched props and state** — `enrich` stamps the run's
+  `forwardedProps` (tokens, tenant, workflow) and server-owned state on the
+  server.
+- **MCP Apps** — an app's own requests pass through, and a run whose MCP App
+  tool was answered in-run goes on with the agent.
 - **Remembered approvals** — with a `GrantStore`, "Allow for this chat" and
   "Always allow" decisions are saved and handed to every run.
 - **Pluggable store** — implement the `ThreadStore` interface for any database;
@@ -340,11 +343,11 @@ The architecture behind kaboo-runtime in one page.
 ## The event log is the source of truth
 
 kaboo-runtime makes the **server** the custodian of conversation history. Every
-AG-UI event a run emits is appended to the thread's log **verbatim and in
-order** — messages, tool calls, `STATE_SNAPSHOT`, and the `ACTIVITY_SNAPSHOT` /
-`CUSTOM` events a rich UI needs. Nothing is compacted or summarized. Everything
-else — messages, current state, the activity tree — is *derived* from that log,
-never stored separately.
+AG-UI event a run emits is appended to the thread's log **in order** — messages,
+tool calls, sub-agent events, state changes and the `CUSTOM` events a rich UI
+needs. A finished run is compacted with AG-UI's `compactEvents`, which joins
+deltas without changing what it replays to. Everything else — messages, current
+state, sub-agent cards — is *derived* from that log, never stored separately.
 
 ```mermaid
 flowchart LR
@@ -361,7 +364,7 @@ flowchart LR
 |-------|------|
 | `KabooAgentRunner` | A CopilotKit `AgentRunner` that records every run and replays a thread's log on reconnect. |
 | `ThreadStore` | The pluggable persistence interface — `InMemoryThreadStore`, `PostgresThreadStore`, or your own. |
-| `deriveState` | Reconstructs current state from an event log (last `STATE_SNAPSHOT` wins), used identically by every store. |
+| `deriveState` | Reconstructs current state from an event log (the last `STATE_SNAPSHOT` with every later `STATE_DELTA` applied), used identically by every store. |
 
 ## Replay on reconnect
 
@@ -373,24 +376,30 @@ keep watching live work.
 
 ## Server-owned history and durable approvals
 
-kaboo-workflows folds what a turn accumulates into its trailing `STATE_SNAPSHOT`.
-Before every run, `KabooAgentRunner` reads the thread's persisted state and sets it
-on the agent as `input.state`, so multi-agent history (`kaboo_history`) is seeded
-from the server — the browser no longer carries conversation history.
+kaboo-workflows writes what a turn accumulates back as a `STATE_DELTA` under
+`kaboo_sessions`. Before every run, `KabooAgentRunner` derives the thread's state
+and sets it on the agent as `input.state`, so every agent's transcript is seeded
+from the server — the browser never carries it, or even sees it.
 
-The same channel carries a pending human-in-the-loop approval (`kaboo_session`),
-which is why an approval now survives a workflows restart instead of failing with
-`No agent session found for resume`.
+The same key carries a paused run waiting on the person, which is why a
+question or an approval survives a workflows restart instead of failing with
+`No agent session found for resume`. Which keys the browser may see or write is
+set per key; see [Replay & state](replay-and-state.md#who-owns-each-state-key),
+which also covers `hydrate()` after a cold start.
 
-For the full detail (including `hydrate()` after a cold start), see
-[Replay & state](replay-and-state.md).
-
-## The other direction: props the server sends in
+## The other direction: what the server sends in
 
 State flows from the store into each run automatically. Context only the server
-can vouch for — a run-scoped token, the tenant, or the workflow config a run
-should execute — is stamped onto `forwardedProps` by wrapping the runner. See
+can vouch for — a run-scoped token, the tenant, the workflow config a run should
+execute, or state the agents should read — is returned from `enrich`. See
 [Server-side props](server-side-props.md).
+
+## MCP Apps
+
+The runner works under CopilotKit's MCP Apps support: an app's own requests
+pass straight through, unrecorded, and a run whose MCP App tool the middleware
+answered goes on with the agent in the same run. See
+[Replay & state](replay-and-state.md#a-run-that-answered-its-own-calls).
 
 ## Where it sits in the stack
 
@@ -543,7 +552,9 @@ and is kept in sync with this guide by a drift check:
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import type { BaseEvent, Message } from "@ag-ui/client";
 import {
+  compactRunEvents,
   deriveState,
+  finishedRunBounds,
   type ListThreadsFilter,
   type StoredThread,
   type ThreadStore,
@@ -560,12 +571,13 @@ interface Row {
 
 /**
  * A minimal ThreadStore that persists every thread to a single JSON file.
- * Demonstrates the extension point — events are stored verbatim and state is
- * derived with `deriveState`. Not tuned for concurrency or scale.
+ * Demonstrates the extension point — events are stored in order, a finished
+ * run is compacted with `compactRunEvents`, and state is derived with
+ * `deriveState`. Not tuned for concurrency or scale.
  *
  * `readState` is load-bearing rather than optional: the runner replays what it
- * returns into the next run, which is how a paused human-in-the-loop approval
- * (`kaboo_session`) survives the agent process restarting.
+ * returns into the next run, which is how a paused run (`kaboo_sessions`)
+ * survives the agent process restarting.
  */
 export class JsonFileThreadStore implements ThreadStore {
   private readonly data: Record<string, Row>;
@@ -601,6 +613,16 @@ export class JsonFileThreadStore implements ThreadStore {
     if (ownerId != null) row.ownerId = ownerId;
     row.events.push(...events);
     row.updatedAt = Date.now();
+    this.flush();
+  }
+
+  async compactRun(threadId: string, runId: string): Promise<void> {
+    const row = this.data[threadId];
+    const bounds = row && finishedRunBounds(row.events, runId);
+    if (!row || !bounds) return;
+    const [start, end] = bounds;
+    const run = row.events.slice(start, end + 1);
+    row.events.splice(start, run.length, ...compactRunEvents(run));
     this.flush();
   }
 
@@ -753,7 +775,7 @@ const runner = createKabooRunner(new PostgresThreadStore({ pool }), {
 Before each run the runner:
 
 1. Matches the run's `resume` answers against the approvals the agent is
-   waiting on (`kaboo_session.approvals` in the stored state). Answers to
+   waiting on (`kaboo_sessions.approvals` in the stored state). Answers to
    anything else are ignored, and a scope the request did not offer is
    narrowed to `once`.
 2. Awaits `onDecision` with the matched decisions — `approved`, `denied` (with
@@ -806,7 +828,7 @@ const runner = createKabooRunner(new InMemoryThreadStore(), {
 What the runner guarantees:
 
 - **`request` comes from the agent:** it is read from the request stored in
-  `kaboo_session`, which comes only from the thread store. A `request` the
+  `kaboo_sessions`, which comes only from the thread store. A `request` the
   browser sends in a resume payload is ignored.
 - **Not a grant:** a decision with a `request` is never saved in the grant
   store, whatever its scope.
@@ -847,21 +869,29 @@ see kaboo-workflows'
 
 # Replay & state
 
-kaboo-runtime treats the AG-UI event log as the single source of truth. Messages,
-tools, state, and activity are all reconstructed from it — there is no separate,
-hand-maintained state blob.
+kaboo-runtime treats the AG-UI event log as the single source of truth.
+Messages, tools, state and sub-agent cards are all reconstructed from it — there
+is no separate, hand-maintained state blob.
 
 ## The event log
 
-Each run's events are appended to the thread's log **verbatim and in order**.
-Nothing is compacted, so `ACTIVITY_SNAPSHOT` and `CUSTOM` events (the ones a rich
-UI like [kaboo-react](https://github.com/gl-pgege/kaboo-react) needs) survive the
-round-trip. `readEvents(threadId)` returns exactly what was emitted.
+Each run's events are appended to the thread's log in order, while the run
+streams. When the run finishes, the store replaces its events with AG-UI's
+`compactEvents` of them: text and tool-argument deltas are joined, and state
+changes are folded into one snapshot. A compacted run replays to the same
+transcript, the same state and the same sub-agent cards as the stream did, in a
+fraction of the events. `readEvents(threadId)` returns the log as stored.
+
+A run's `RUN_STARTED` is stamped with the input that matters for replay: the
+messages the run added and any resume answers. A run that failed before the
+agent said anything still shows what was asked. Tools, state and
+`forwardedProps` stay out: they are large, already logged elsewhere, or carry
+credentials.
 
 ## Deriving state
 
-State is not stored on its own. `deriveState` scans an event log backwards for
-the last `STATE_SNAPSHOT` and returns its snapshot object (or `null`):
+State is not stored on its own. `deriveState` takes the last `STATE_SNAPSHOT` in
+an event log and applies every `STATE_DELTA` after it:
 
 ```ts
 import { deriveState } from "@pgege/kaboo-runtime";
@@ -874,42 +904,61 @@ const state = deriveState(events); // Record<string, unknown> | null
 The built-in stores use `deriveState` for `readState`, and so should custom
 stores, so behavior is identical everywhere.
 
+## Who owns each state key
+
+A thread's state has three kinds of top-level key:
+
+| Kind | Default keys | The browser… | Before a run, the agent gets… |
+|---|---|---|---|
+| hidden | `kaboo_sessions` | never sees it | the stored value |
+| server | `kaboo_workspace` | sees it, read-only | the stored value |
+| browser | everything else | owns it | the value the browser sent, or the stored one when it sent none |
+
+So a client cannot forge a pending approval, rewrite an agent's transcript or
+overwrite the workspace the agents maintain, and the agents' sessions, which
+can be large, never travel to the browser at all. Live events are filtered the
+same way: a `STATE_DELTA` that only touches a hidden key isn't sent, and a
+replay sends the state without it.
+
+```ts
+import { createKabooRunner, InMemoryThreadStore } from "@pgege/kaboo-runtime";
+
+const runner = createKabooRunner(new InMemoryThreadStore(), {
+  stateKeys: { hidden: ["kaboo_sessions"], server: ["kaboo_workspace", "billing"] },
+});
+```
+
+A host vouches for a server key itself by returning it from `enrich`
+([Server-side props](server-side-props.md)).
+
 ## State replay is a guarantee, not a convention
 
-kaboo-workflows folds what a turn accumulates into its trailing `STATE_SNAPSHOT`.
-Before every run, `KabooAgentRunner` reads the thread's persisted state and sets
-it on the agent as `input.state` (persisted values first, then any incoming state,
-so an explicit caller value wins). Every app on the runtime therefore gets the
-round-trip without writing any code for it.
+kaboo-workflows writes what a turn accumulates back as a `STATE_DELTA`. Before
+every run, `KabooAgentRunner` derives the thread's state and sets it on the
+agent as `input.state`, by the ownership above. Every app on the runtime
+therefore gets the round-trip without writing any code for it:
 
-Two things ride that channel today, and both come **only from the store**: a
-copy the browser sends is ignored, so a client cannot forge a pending approval
-or rewrite a transcript.
+- **`kaboo_sessions.history`** — every agent's transcript, so multi-agent memory
+  is seeded from the server rather than the browser.
+- **`kaboo_sessions.paused`** — the paused checkpoint of a run waiting on the
+  person. This is what makes a question or an approval durable: it is restored
+  onto whichever process serves the next turn, so a workflows restart, a second
+  replica, or a rebuilt session no longer strands it.
+- **`kaboo_sessions.approvals`** — each open approval request (`interruptId`,
+  `tool`, `subject`, `scopes`, `input`), which the runner matches the person's
+  decisions against ([Access control](access-control.md#remembered-approvals)).
 
-- **`kaboo_history`** — sub-agent transcripts, so multi-agent history is seeded
-  from the server rather than the browser.
-- **`kaboo_session`** — a pending human-in-the-loop interrupt. This is what makes
-  an approval durable: the open gate is restored onto whichever agent serves the
-  resume, so a workflows restart, a second replica, or a rebuilt session between
-  the question and the answer no longer strands it with
-  `No agent session found for resume`. Its `approvals` list describes each open
-  approval request (`interruptId`, `tool`, `subject`, `scopes`, `input`), which
-  is what the runner matches the person's decisions against
-  ([Access control](access-control.md#remembered-approvals)).
-
-Client-staged keys such as `kaboo_references` still come from the browser.
-
-Because a paused approval now depends on this, persisting `STATE_SNAPSHOT` is a
-requirement of a store rather than a nicety — see [thread stores](thread-stores.md)
-and [custom store](custom-store.md).
+Because a paused run depends on this, persisting state events is a requirement
+of a store rather than a nicety — see [thread stores](thread-stores.md) and
+[custom store](custom-store.md).
 
 ## Replay on reconnect
 
 `connect(threadId)` replays the thread's stored log, then tees any in-flight run:
 
 - If nothing is running, it emits the stored events and completes.
-- If a run is in flight (its events aren't persisted until completion), it emits
-  the stored prior turns and then forwards live events from the running run.
+- If a run is in flight, it emits the stored prior turns and then forwards live
+  events from the running run.
 
 This is what lets a browser reload — or a second tab — rebuild the full
 transcript and then continue watching live work.
@@ -917,9 +966,21 @@ transcript and then continue watching live work.
 The stored part is made safe for an AG-UI client first. The client accepts
 nothing after a run's `RUN_ERROR`, so a run that failed or was aborted (the
 client aborts a run to send a new message) replays as finished — after closing
-any message or tool call it left open — and the turns after it stay visible.
-A terminal event outside any run is dropped, and messages the log lost are
-replayed inside the last run rather than after it.
+any message or tool call it left open — and the turns after it stay visible. A terminal event outside any run is dropped, and messages the log lost
+are replayed inside the last run rather than after it.
+
+## A run that answered its own calls
+
+When an agent calls an MCP App's tool, the run ends waiting on the call, and
+CopilotKit's MCP Apps middleware answers it in that same response. The runner
+then runs the agent again with the answer, as the browser does after answering a
+tool itself, and the turn arrives as one run: one `RUN_STARTED`, the app, the
+agent's answer, one `RUN_FINISHED`. A run still waiting on the browser ends as
+it is.
+
+MCP Apps' own requests — the app reading its resource or calling its server's
+tools, sent as runs carrying `forwardedProps.__proxiedMCPRequest` — pass straight
+through to the agent: they are not stored, enriched or checked for approvals.
 
 ## Warming the index after a cold start
 
@@ -937,12 +998,6 @@ async function main() {
   return runner.listThreads();
 }
 ```
-
-## No compaction
-
-Unlike the stock in-memory runner, kaboo-runtime never trims or summarizes the
-log. Durability + verbatim storage is the whole point: the cost is storage, the
-benefit is a perfectly reconstructable conversation.
 
 ---
 
@@ -963,8 +1018,9 @@ the server. This page shows where to stamp them.
 ## The seam: `enrich`
 
 Pass `enrich` to the runner. It runs before every run — chat turns,
-programmatic runs and resumes alike — and its return value **replaces** the
-client's `forwardedProps`, so keep client values by spreading
+programmatic runs and resumes alike — and returns what the server adds:
+`forwardedProps`, which **replace** the client's, and `state`, for server-owned
+keys the host vouches for. Keep client values by spreading
 `input.forwardedProps` first and leave out anything only the server may set:
 
 ```ts
@@ -980,9 +1036,11 @@ const runner = createKabooRunner(new InMemoryThreadStore(), {
     const { workflow_config: _ignored, ...client } =
       (input.forwardedProps as Record<string, unknown> | undefined) ?? {};
     return {
-      ...client,
-      workflow_config: await configForThread(threadId), // the run's YAML
-      run_token: await mintRunToken(ownerId), // scoped, short-lived
+      forwardedProps: {
+        ...client,
+        workflow_config: await configForThread(threadId), // the run's YAML
+        run_token: await mintRunToken(ownerId), // scoped, short-lived
+      },
     };
   },
 });
@@ -992,7 +1050,29 @@ const runtime = new CopilotRuntime({ agents: {}, runner });
 
 `enrich` receives the thread id, the agent id, the owner (from
 `accessPolicy.ownerOf`) and the run's input. If it throws, the run ends with an
-error and the agent never runs.
+error and the agent never runs. Without `forwardedProps` in its result the
+client's are kept.
+
+## State the server vouches for
+
+`state` in `enrich`'s result sets server-owned keys for this run, over the
+stored values; a browser's copy of those keys is never used. Use it for facts
+only the server knows that the agents should read as state, such as the person's
+plan or the workspace's current project:
+
+```ts
+import { createKabooRunner, InMemoryThreadStore } from "@pgege/kaboo-runtime";
+
+declare function projectSummary(threadId: string): Promise<Record<string, unknown>>;
+
+const runner = createKabooRunner(new InMemoryThreadStore(), {
+  stateKeys: { hidden: ["kaboo_sessions"], server: ["kaboo_workspace", "project"] },
+  enrich: async ({ threadId }) => ({ state: { project: await projectSummary(threadId) } }),
+});
+```
+
+See [Replay & state](replay-and-state.md#who-owns-each-state-key) for who owns
+each key.
 
 ## What belongs here
 
@@ -1016,7 +1096,7 @@ It is sent only when the runner has a grant store; see
 
 ## Resolving per turn, not per thread
 
-A continuation turn arrives with a thread id and nothing else, so `enrich` runs
+A follow-up turn arrives with a thread id and nothing else, so `enrich` runs
 on every turn rather than once at thread creation. Read the config from your
 database each time and an edit takes effect on the next turn, with no cache to
 invalidate. Persisting the exact string you sent alongside the run is worth the
@@ -1024,10 +1104,10 @@ column: it is the only record of what actually executed.
 
 ## What it does not carry
 
-Conversation state. History (`kaboo_history`) and pending approvals
-(`kaboo_session`) travel on the AG-UI state channel, which the runner replays
+Conversation state. The agents' transcripts and a paused run
+(`kaboo_sessions`) travel on the AG-UI state channel, which the runner replays
 from the store on its own — see [Replay & state](replay-and-state.md). Putting
-either in `forwardedProps` would fight the mechanism that already handles them.
+them in `forwardedProps` would fight the mechanism that already handles them.
 
 ---
 
@@ -1197,6 +1277,91 @@ The kaboo libraries can be upgraded in any order; features that span the stack
 light up once every piece is upgraded — see
 [Upgrading the stack](https://gl-pgege.github.io/kaboo-docs/start-here/#upgrading-the-stack).
 
+## 0.8
+
+0.8 follows kaboo-workflows 0.29 onto AG-UI's own events and state. Upgrade the
+three libraries together: kaboo-workflows 0.29, kaboo-runtime 0.8 and
+kaboo-react 0.12.
+
+### `enrich` returns what it adds
+
+**Who:** hosts that pass `enrich`.
+
+`enrich` used to return the run's `forwardedProps`. It now returns an object
+naming what it adds, so it can also set server-owned state:
+
+```diff
+  enrich: async ({ threadId, input }) => {
+    const client = (input.forwardedProps as Record<string, unknown> | undefined) ?? {};
+-   return { ...client, workflow_config: await configForThread(threadId) };
++   return { forwardedProps: { ...client, workflow_config: await configForThread(threadId) } };
+  },
+```
+
+Without `forwardedProps` in the result, the client's are kept. `state` sets
+server-owned keys for the run ([Server-side props](server-side-props.md#state-the-server-vouches-for)).
+
+### Each state key has an owner
+
+**Who:** hosts that read or write `kaboo_history` or `kaboo_session`.
+
+kaboo-workflows 0.29 keeps a conversation's memory in `kaboo_sessions` and the
+workspace its agents maintain in `kaboo_workspace`. The runner treats them as
+server keys: `kaboo_sessions` never reaches the browser, and `kaboo_workspace`
+reaches it read-only. A browser's copy of either is ignored, as it was for the
+old keys. Change the split with `stateKeys`:
+
+```ts
+import { createKabooRunner, InMemoryThreadStore } from "@pgege/kaboo-runtime";
+
+const runner = createKabooRunner(new InMemoryThreadStore(), {
+  stateKeys: { hidden: ["kaboo_sessions"], server: ["kaboo_workspace", "billing"] },
+});
+```
+
+`deriveState` now applies the `STATE_DELTA`s after the last `STATE_SNAPSHOT`,
+which is how kaboo-workflows 0.29 writes state back. See
+[Replay & state](replay-and-state.md#who-owns-each-state-key).
+
+### Finished runs are compacted
+
+**Who:** custom `ThreadStore`s.
+
+The runner asks the store to compact each finished run with AG-UI's
+`compactEvents`, which replays to the same transcript and cards. `ThreadStore`
+gains `compactRun`; implement it with the two helpers the package exports:
+
+```ts
+import { compactRunEvents, finishedRunBounds, type ThreadStore } from "@pgege/kaboo-runtime";
+import type { BaseEvent } from "@ag-ui/client";
+
+declare const rows: Map<string, { events: BaseEvent[] }>;
+
+export const compactRun: ThreadStore["compactRun"] = async (threadId, runId) => {
+  const row = rows.get(threadId);
+  const bounds = row && finishedRunBounds(row.events, runId);
+  if (!row || !bounds) return;
+  const [start, end] = bounds;
+  const run = row.events.slice(start, end + 1);
+  row.events.splice(start, run.length, ...compactRunEvents(run));
+};
+```
+
+`pruneSupersededActivitySnapshots` is removed: kaboo-workflows no longer sends
+activity snapshots. The built-in stores need no change, and no database
+migration is needed.
+
+### New
+
+- **`KabooHttpAgent`** — an `HttpAgent` for a kaboo-workflows service that reports
+  its AG-UI `AgentCapabilities` to CopilotKit.
+- **MCP Apps** — an app's own requests pass straight through, unrecorded, and a
+  run whose MCP App tool CopilotKit's middleware answered goes on with the agent
+  in the same run ([Replay & state](replay-and-state.md#a-run-that-answered-its-own-calls)).
+- **`RUN_STARTED.input`** carries the messages the run added and any resume
+  answers, so a replay of a run that failed early still shows what was asked.
+- The package's CommonJS build now has its own type declarations.
+
 ## 0.7.1
 
 **Who:** hosts whose `approvals.onDecision` or `enrich` can throw, and hosts
@@ -1355,9 +1520,12 @@ Generated by `yarn docs:api` from the TypeDoc output. Every public export of `ka
 
 ## Functions
 
+- [`applyStateDelta`](api/functions/applyStateDelta.md)
+- [`compactRunEvents`](api/functions/compactRunEvents.md)
 - [`createKabooRunner`](api/functions/createKabooRunner.md)
 - [`deriveState`](api/functions/deriveState.md)
-- [`pruneSupersededActivitySnapshots`](api/functions/pruneSupersededActivitySnapshots.md)
+- [`finishedRunBounds`](api/functions/finishedRunBounds.md)
+- [`replayableLog`](api/functions/replayableLog.md)
 - [`resolveApprovalDecisions`](api/functions/resolveApprovalDecisions.md)
 
 ## Classes
@@ -1365,8 +1533,10 @@ Generated by `yarn docs:api` from the TypeDoc output. Every public export of `ka
 - [`InMemoryGrantStore`](api/classes/InMemoryGrantStore.md)
 - [`InMemoryThreadStore`](api/classes/InMemoryThreadStore.md)
 - [`KabooAgentRunner`](api/classes/KabooAgentRunner.md)
+- [`KabooHttpAgent`](api/classes/KabooHttpAgent.md)
 - [`PostgresGrantStore`](api/classes/PostgresGrantStore.md)
 - [`PostgresThreadStore`](api/classes/PostgresThreadStore.md)
+- [`StateOwnership`](api/classes/StateOwnership.md)
 
 ## Interfaces
 
@@ -1376,8 +1546,10 @@ Generated by `yarn docs:api` from the TypeDoc output. Every public export of `ka
 - [`GrantStore`](api/interfaces/GrantStore.md)
 - [`KabooAccessPolicy`](api/interfaces/KabooAccessPolicy.md)
 - [`KabooApprovalOptions`](api/interfaces/KabooApprovalOptions.md)
+- [`KabooEnrichment`](api/interfaces/KabooEnrichment.md)
 - [`KabooRunContext`](api/interfaces/KabooRunContext.md)
 - [`KabooRunnerOptions`](api/interfaces/KabooRunnerOptions.md)
+- [`KabooStateKeys`](api/interfaces/KabooStateKeys.md)
 - [`ListThreadsFilter`](api/interfaces/ListThreadsFilter.md)
 - [`MessageMeta`](api/interfaces/MessageMeta.md)
 - [`PostgresGrantStoreOptions`](api/interfaces/PostgresGrantStoreOptions.md)
@@ -1390,8 +1562,11 @@ Generated by `yarn docs:api` from the TypeDoc output. Every public export of `ka
 
 - [`ApprovalScope`](api/type-aliases/ApprovalScope.md)
 - [`NewToolGrant`](api/type-aliases/NewToolGrant.md)
+- [`ThreadState`](api/type-aliases/ThreadState.md)
 
 ## Variables
 
+- [`DEFAULT_STATE_KEYS`](api/variables/DEFAULT_STATE_KEYS.md)
 - [`KABOO_GRANTS_PROP`](api/variables/KABOO_GRANTS_PROP.md)
 - [`MESSAGE_META_EVENT`](api/variables/MESSAGE_META_EVENT.md)
+- [`RUN_ERROR_EVENT`](api/variables/RUN_ERROR_EVENT.md)

@@ -6,7 +6,7 @@
 
 > `const` **MESSAGE\_META\_EVENT**: `"kaboo.message_meta"` = `"kaboo.message_meta"`
 
-Defined in: [src/runner.ts:45](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L45)
+Defined in: [src/runner.ts:39](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L39)
 
 Name of the `CUSTOM` event the runner emits (and persists) once per new
 input message of a run, carrying `{ messageId, role, createdAt, references }`.

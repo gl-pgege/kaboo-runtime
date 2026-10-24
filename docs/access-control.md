@@ -87,7 +87,7 @@ const runner = createKabooRunner(new PostgresThreadStore({ pool }), {
 Before each run the runner:
 
 1. Matches the run's `resume` answers against the approvals the agent is
-   waiting on (`kaboo_session.approvals` in the stored state). Answers to
+   waiting on (`kaboo_sessions.approvals` in the stored state). Answers to
    anything else are ignored, and a scope the request did not offer is
    narrowed to `once`.
 2. Awaits `onDecision` with the matched decisions — `approved`, `denied` (with
@@ -140,7 +140,7 @@ const runner = createKabooRunner(new InMemoryThreadStore(), {
 What the runner guarantees:
 
 - **`request` comes from the agent:** it is read from the request stored in
-  `kaboo_session`, which comes only from the thread store. A `request` the
+  `kaboo_sessions`, which comes only from the thread store. A `request` the
   browser sends in a resume payload is ignored.
 - **Not a grant:** a decision with a `request` is never saved in the grant
   store, whatever its scope.

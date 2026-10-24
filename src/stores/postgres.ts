@@ -1,6 +1,7 @@
 import type { Pool } from "pg";
 import type { BaseEvent, Message } from "@ag-ui/client";
 import type { ListThreadsFilter, StoredThread, ThreadStore } from "../store";
+import { compactRunEvents, finishedRunBounds } from "../store";
 import { deriveState } from "../state";
 
 /**
@@ -126,25 +127,58 @@ export class PostgresThreadStore implements ThreadStore {
           [threadId, toJsonbSafe(event)],
         );
       }
-      if (events.some((e) => e.type === "ACTIVITY_SNAPSHOT")) {
-        // Each ACTIVITY_SNAPSHOT fully replaces the previous one for its
-        // message, so only the latest per message matters for replay. Pruning
-        // on append keeps the log bounded — long runs otherwise accumulate
-        // thousands of superseded snapshots at hundreds of KB each.
-        await client.query(
-          `DELETE FROM kaboo_thread_events e
-           USING (
-             SELECT event->>'messageId' AS message_id, max(seq) AS keep_seq
-             FROM kaboo_thread_events
-             WHERE thread_id = $1 AND event->>'type' = 'ACTIVITY_SNAPSHOT'
-             GROUP BY event->>'messageId'
-           ) latest
-           WHERE e.thread_id = $1
-             AND e.event->>'type' = 'ACTIVITY_SNAPSHOT'
-             AND e.event->>'messageId' IS NOT DISTINCT FROM latest.message_id
-             AND e.seq < latest.keep_seq`,
-          [threadId],
-        );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async compactRun(threadId: string, runId: string): Promise<void> {
+    const pool = await this.ensureReady();
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const { rows: starts } = await client.query<{ seq: string }>(
+        `SELECT seq FROM kaboo_thread_events
+         WHERE thread_id = $1 AND event->>'type' = 'RUN_STARTED' AND event->>'runId' = $2
+         ORDER BY seq DESC LIMIT 1`,
+        [threadId, runId],
+      );
+      const { rows } = starts[0]
+        ? await client.query<{ seq: string; event: BaseEvent }>(
+            `SELECT seq, event FROM kaboo_thread_events
+             WHERE thread_id = $1 AND seq >= $2 ORDER BY seq FOR UPDATE`,
+            [threadId, starts[0].seq],
+          )
+        : { rows: [] };
+      const bounds = finishedRunBounds(
+        rows.map((row) => row.event),
+        runId,
+      );
+      if (!bounds) {
+        await client.query("COMMIT");
+        return;
+      }
+      const run = rows.slice(bounds[0], bounds[1] + 1);
+      const events = run.map((row) => row.event);
+      const compacted = compactRunEvents(events);
+      if (compacted !== events) {
+        // The compacted run reuses the first of its old sequence numbers, so it
+        // stays ahead of anything appended after it.
+        await client.query(`DELETE FROM kaboo_thread_events WHERE thread_id = $1 AND seq = ANY($2::bigint[])`, [
+          threadId,
+          run.map((row) => row.seq),
+        ]);
+        for (const [index, event] of compacted.entries()) {
+          await client.query(`INSERT INTO kaboo_thread_events (seq, thread_id, event) VALUES ($1, $2, $3)`, [
+            run[index].seq,
+            threadId,
+            toJsonbSafe(event),
+          ]);
+        }
       }
       await client.query("COMMIT");
     } catch (error) {
@@ -166,17 +200,18 @@ export class PostgresThreadStore implements ThreadStore {
 
   async readState(threadId: string): Promise<Record<string, unknown> | null> {
     const pool = await this.ensureReady();
-    // Fetch only the last STATE_SNAPSHOT instead of deriving from the full
-    // log — logs of long agent runs can be hundreds of megabytes.
+    // Only the last snapshot and the deltas after it, not the whole log: logs
+    // of long agent runs can be hundreds of megabytes.
     const { rows } = await pool.query<{ event: BaseEvent }>(
       `SELECT event FROM kaboo_thread_events
-       WHERE thread_id = $1 AND event->>'type' = $2
-       ORDER BY seq DESC LIMIT 1`,
-      [threadId, "STATE_SNAPSHOT"],
+       WHERE thread_id = $1 AND event->>'type' IN ('STATE_SNAPSHOT', 'STATE_DELTA')
+         AND seq >= COALESCE(
+           (SELECT max(seq) FROM kaboo_thread_events WHERE thread_id = $1 AND event->>'type' = 'STATE_SNAPSHOT'),
+           0)
+       ORDER BY seq ASC`,
+      [threadId],
     );
-    const event = rows[0]?.event;
-    if (!event) return null;
-    return deriveState([event]);
+    return deriveState(rows.map((r) => r.event));
   }
 
   async saveMessages(threadId: string, messages: Message[]): Promise<void> {

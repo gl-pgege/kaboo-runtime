@@ -6,6 +6,44 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.0]
+
+See [Upgrading](docs/upgrading.md#08).
+
+### Changed
+
+- **`enrich` returns `{ forwardedProps?, state? }`** instead of the run's
+  `forwardedProps`, so a host can also vouch for server-owned state.
+- **State keys have owners.** `kaboo_sessions` never reaches the browser and
+  `kaboo_workspace` reaches it read-only; a browser's copy of either is ignored.
+  `stateKeys` changes the split. `deriveState` applies `STATE_DELTA`s after the
+  last `STATE_SNAPSHOT`.
+- **Finished runs are compacted** with AG-UI's `compactEvents`. `ThreadStore`
+  gains `compactRun`.
+
+### Added
+
+- **`KabooHttpAgent`**, which reports a kaboo-workflows service's AG-UI
+  `AgentCapabilities` to CopilotKit.
+- **MCP Apps support.** Proxied MCP Apps requests pass through unrecorded, and a
+  run whose MCP App tool was answered in-run goes on with the agent in the same
+  run.
+- **`RUN_STARTED.input`** carries the messages the run added and any resume
+  answers, for replay.
+- **`compactRunEvents`, `finishedRunBounds`, `applyStateDelta`,
+  `DEFAULT_STATE_KEYS`, `StateOwnership`, `replayableLog`, `RUN_ERROR_EVENT` and
+  the `ThreadState` type** are exported.
+
+### Removed
+
+- **`pruneSupersededActivitySnapshots`**: kaboo-workflows no longer sends
+  activity snapshots.
+
+### Fixed
+
+- **The CommonJS build has its own type declarations**, so `require` consumers
+  type-check.
+
 ## [0.7.1]
 
 See [Upgrading](docs/upgrading.md#071).

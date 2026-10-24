@@ -4,7 +4,7 @@
 
 # Interface: ThreadStore
 
-Defined in: [src/store.ts:39](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L39)
+Defined in: [src/store.ts:36](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L36)
 
 Pluggable persistence for a thread's full AG-UI event log.
 
@@ -12,14 +12,11 @@ This is the extension point: implement it against your own database to
 control where conversations live. `kaboo-runtime` ships `InMemoryThreadStore`
 and `PostgresThreadStore` out of the box.
 
-The store persists events verbatim so `ACTIVITY_SNAPSHOT` / `CUSTOM` events
-survive the round-trip and the full UI can be replayed — with one exception:
-superseded `ACTIVITY_SNAPSHOT` events. Each snapshot fully replaces the
-previous one for its message, so only the latest per message affects a
-replay, while a long run can emit thousands of them at hundreds of KB each
-(a single conversation reaching hundreds of MB in practice). Stores prune
-superseded snapshots on append via
-[pruneSupersededActivitySnapshots](../functions/pruneSupersededActivitySnapshots.md); custom stores should do the same.
+Events are appended as a run streams, so a crash keeps everything up to the
+last write. Once a run ends, the runner asks the store to compact it
+([ThreadStore.compactRun](#compactrun)): streamed deltas become single events and
+the run's state changes become one snapshot, with the order of everything
+else kept.
 
 ## Methods
 
@@ -27,9 +24,9 @@ superseded snapshots on append via
 
 > **appendEvents**(`threadId`, `agentId`, `events`, `ownerId?`): `Promise`\<`void`\>
 
-Defined in: [src/store.ts:47](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L47)
+Defined in: [src/store.ts:44](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L44)
 
-Append a completed run's events (in order) to the thread's log.
+Append events (in order) to the thread's log.
 
 `ownerId` records the owning subject on the thread (the runner passes it
 from [accessPolicy.ownerOf](KabooRunnerOptions.md#accesspolicy)). A
@@ -63,7 +60,7 @@ nullish value must preserve any owner already recorded.
 
 > **clear**(`threadId?`): `Promise`\<`void`\>
 
-Defined in: [src/store.ts:67](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L67)
+Defined in: [src/store.ts:70](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L70)
 
 Delete one thread's data, or all threads when `threadId` is omitted.
 
@@ -79,11 +76,37 @@ Delete one thread's data, or all threads when `threadId` is omitted.
 
 ***
 
+### compactRun()
+
+> **compactRun**(`threadId`, `runId`): `Promise`\<`void`\>
+
+Defined in: [src/store.ts:55](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L55)
+
+Replace a finished run's events with [compactRunEvents](../functions/compactRunEvents.md) of them, in
+place: events appended after the run keep their position. A run that has
+not finished, or is not in the log, is left alone.
+
+#### Parameters
+
+##### threadId
+
+`string`
+
+##### runId
+
+`string`
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
 ### listThreads()
 
 > **listThreads**(`filter?`): `Promise`\<[`StoredThread`](StoredThread.md)[]\>
 
-Defined in: [src/store.ts:65](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L65)
+Defined in: [src/store.ts:68](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L68)
 
 List persisted threads, most recently updated first. With
 `filter.ownerId`, only that subject's threads are returned.
@@ -104,9 +127,9 @@ List persisted threads, most recently updated first. With
 
 > **readEvents**(`threadId`): `Promise`\<`BaseEvent`[]\>
 
-Defined in: [src/store.ts:54](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L54)
+Defined in: [src/store.ts:57](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L57)
 
-Read the thread's full event log, verbatim and in order.
+Read the thread's full event log, in order.
 
 #### Parameters
 
@@ -124,7 +147,7 @@ Read the thread's full event log, verbatim and in order.
 
 > **readMessages**(`threadId`): `Promise`\<`Message`[]\>
 
-Defined in: [src/store.ts:60](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L60)
+Defined in: [src/store.ts:63](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L63)
 
 Read the derived message snapshot for a thread.
 
@@ -144,9 +167,9 @@ Read the derived message snapshot for a thread.
 
 > **readState**(`threadId`): `Promise`\<`Record`\<`string`, `unknown`\> \| `null`\>
 
-Defined in: [src/store.ts:56](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L56)
+Defined in: [src/store.ts:59](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L59)
 
-Read the latest agent state (from the last STATE_SNAPSHOT), or `null`.
+Read the latest agent state (see `deriveState`), or `null`.
 
 #### Parameters
 
@@ -164,7 +187,7 @@ Read the latest agent state (from the last STATE_SNAPSHOT), or `null`.
 
 > **saveMessages**(`threadId`, `messages`): `Promise`\<`void`\>
 
-Defined in: [src/store.ts:58](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L58)
+Defined in: [src/store.ts:61](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/store.ts#L61)
 
 Persist the derived message snapshot for a thread.
 

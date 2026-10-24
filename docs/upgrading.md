@@ -8,6 +8,91 @@ The kaboo libraries can be upgraded in any order; features that span the stack
 light up once every piece is upgraded — see
 [Upgrading the stack](https://gl-pgege.github.io/kaboo-docs/start-here/#upgrading-the-stack).
 
+## 0.8
+
+0.8 follows kaboo-workflows 0.29 onto AG-UI's own events and state. Upgrade the
+three libraries together: kaboo-workflows 0.29, kaboo-runtime 0.8 and
+kaboo-react 0.12.
+
+### `enrich` returns what it adds
+
+**Who:** hosts that pass `enrich`.
+
+`enrich` used to return the run's `forwardedProps`. It now returns an object
+naming what it adds, so it can also set server-owned state:
+
+```diff
+  enrich: async ({ threadId, input }) => {
+    const client = (input.forwardedProps as Record<string, unknown> | undefined) ?? {};
+-   return { ...client, workflow_config: await configForThread(threadId) };
++   return { forwardedProps: { ...client, workflow_config: await configForThread(threadId) } };
+  },
+```
+
+Without `forwardedProps` in the result, the client's are kept. `state` sets
+server-owned keys for the run ([Server-side props](server-side-props.md#state-the-server-vouches-for)).
+
+### Each state key has an owner
+
+**Who:** hosts that read or write `kaboo_history` or `kaboo_session`.
+
+kaboo-workflows 0.29 keeps a conversation's memory in `kaboo_sessions` and the
+workspace its agents maintain in `kaboo_workspace`. The runner treats them as
+server keys: `kaboo_sessions` never reaches the browser, and `kaboo_workspace`
+reaches it read-only. A browser's copy of either is ignored, as it was for the
+old keys. Change the split with `stateKeys`:
+
+```ts
+import { createKabooRunner, InMemoryThreadStore } from "@pgege/kaboo-runtime";
+
+const runner = createKabooRunner(new InMemoryThreadStore(), {
+  stateKeys: { hidden: ["kaboo_sessions"], server: ["kaboo_workspace", "billing"] },
+});
+```
+
+`deriveState` now applies the `STATE_DELTA`s after the last `STATE_SNAPSHOT`,
+which is how kaboo-workflows 0.29 writes state back. See
+[Replay & state](replay-and-state.md#who-owns-each-state-key).
+
+### Finished runs are compacted
+
+**Who:** custom `ThreadStore`s.
+
+The runner asks the store to compact each finished run with AG-UI's
+`compactEvents`, which replays to the same transcript and cards. `ThreadStore`
+gains `compactRun`; implement it with the two helpers the package exports:
+
+```ts
+import { compactRunEvents, finishedRunBounds, type ThreadStore } from "@pgege/kaboo-runtime";
+import type { BaseEvent } from "@ag-ui/client";
+
+declare const rows: Map<string, { events: BaseEvent[] }>;
+
+export const compactRun: ThreadStore["compactRun"] = async (threadId, runId) => {
+  const row = rows.get(threadId);
+  const bounds = row && finishedRunBounds(row.events, runId);
+  if (!row || !bounds) return;
+  const [start, end] = bounds;
+  const run = row.events.slice(start, end + 1);
+  row.events.splice(start, run.length, ...compactRunEvents(run));
+};
+```
+
+`pruneSupersededActivitySnapshots` is removed: kaboo-workflows no longer sends
+activity snapshots. The built-in stores need no change, and no database
+migration is needed.
+
+### New
+
+- **`KabooHttpAgent`** — an `HttpAgent` for a kaboo-workflows service that reports
+  its AG-UI `AgentCapabilities` to CopilotKit.
+- **MCP Apps** — an app's own requests pass straight through, unrecorded, and a
+  run whose MCP App tool CopilotKit's middleware answered goes on with the agent
+  in the same run ([Replay & state](replay-and-state.md#a-run-that-answered-its-own-calls)).
+- **`RUN_STARTED.input`** carries the messages the run added and any resume
+  answers, so a replay of a run that failed early still shows what was asked.
+- The package's CommonJS build now has its own type declarations.
+
 ## 0.7.1
 
 **Who:** hosts whose `approvals.onDecision` or `enrich` can throw, and hosts

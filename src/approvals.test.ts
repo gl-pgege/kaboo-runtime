@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { resolveApprovalDecisions } from "./approvals";
 
 const waiting = (extra: Record<string, unknown> = {}) => ({
-  kaboo_session: {
+  kaboo_sessions: {
     approvals: [
       {
         interruptId: "i1",
@@ -61,6 +61,7 @@ describe("resolveApprovalDecisions", () => {
     [{ status: "resolved", payload: { status: "cancelled" } }, "denied", undefined],
     [{ status: "cancelled" }, "skipped", undefined],
     [{ status: "resolved", payload: { status: "maybe" } }, "skipped", undefined],
+    [{ status: "resolved" }, "skipped", undefined],
   ] as const)("classifies %o as %s", (answer, decision, reason) => {
     const [result] = resolveApprovalDecisions([{ interruptId: "i1", ...answer }], waiting());
     expect(result.decision).toBe(decision);

@@ -4,7 +4,7 @@
 
 # Interface: KabooRunnerOptions
 
-Defined in: [src/runner.ts:279](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L279)
+Defined in: [src/runner.ts:294](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L294)
 
 Options for [KabooAgentRunner](../classes/KabooAgentRunner.md) / [createKabooRunner](../functions/createKabooRunner.md).
 
@@ -14,7 +14,7 @@ Options for [KabooAgentRunner](../classes/KabooAgentRunner.md) / [createKabooRun
 
 > `optional` **accessPolicy?**: [`KabooAccessPolicy`](KabooAccessPolicy.md)
 
-Defined in: [src/runner.ts:283](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L283)
+Defined in: [src/runner.ts:298](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L298)
 
 Ownership hooks — see [KabooAccessPolicy](KabooAccessPolicy.md).
 
@@ -24,7 +24,7 @@ Ownership hooks — see [KabooAccessPolicy](KabooAccessPolicy.md).
 
 > `optional` **approvals?**: [`KabooApprovalOptions`](KabooApprovalOptions.md)
 
-Defined in: [src/runner.ts:295](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L295)
+Defined in: [src/runner.ts:306](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L306)
 
 Remembered tool approvals — see [KabooApprovalOptions](KabooApprovalOptions.md).
 
@@ -32,17 +32,13 @@ Remembered tool approvals — see [KabooApprovalOptions](KabooApprovalOptions.md
 
 ### enrich?
 
-> `optional` **enrich?**: (`context`) => `Record`\<`string`, `unknown`\> \| `Promise`\<`Record`\<`string`, `unknown`\>\>
+> `optional` **enrich?**: (`context`) => [`KabooEnrichment`](KabooEnrichment.md) \| `Promise`\<[`KabooEnrichment`](KabooEnrichment.md)\>
 
-Defined in: [src/runner.ts:293](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L293)
+Defined in: [src/runner.ts:304](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L304)
 
-Build the run's `forwardedProps` from values the host vouches for —
-run-scoped credentials, the tenant, a composed workflow. The returned
-object replaces the client's `forwardedProps` (start from
-`context.input.forwardedProps` to keep client values), so a client cannot
-smuggle in what only the host may set. Awaited before the run starts; if
-it throws, the run ends with an error. `kaboo_grants` is always set by the
-runner, never taken from here or the client.
+Add what the host vouches for to a run — run-scoped credentials, the
+tenant, a composed workflow, a server-owned state value. Awaited before
+the run starts; if it throws, the run ends with an error.
 
 #### Parameters
 
@@ -52,7 +48,7 @@ runner, never taken from here or the client.
 
 #### Returns
 
-`Record`\<`string`, `unknown`\> \| `Promise`\<`Record`\<`string`, `unknown`\>\>
+[`KabooEnrichment`](KabooEnrichment.md) \| `Promise`\<[`KabooEnrichment`](KabooEnrichment.md)\>
 
 ***
 
@@ -60,7 +56,7 @@ runner, never taken from here or the client.
 
 > `optional` **onStoreError?**: (`error`, `context`) => `void`
 
-Defined in: [src/runner.ts:281](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L281)
+Defined in: [src/runner.ts:296](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L296)
 
 Called when a store write fails, so hosts can log/observe.
 
@@ -83,3 +79,14 @@ Called when a store write fails, so hosts can log/observe.
 #### Returns
 
 `void`
+
+***
+
+### stateKeys?
+
+> `optional` **stateKeys?**: [`KabooStateKeys`](KabooStateKeys.md)
+
+Defined in: [src/runner.ts:311](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L311)
+
+Which state keys the server owns. Defaults to [DEFAULT\_STATE\_KEYS](../variables/DEFAULT_STATE_KEYS.md):
+kaboo-workflows' sessions hidden, its workspace visible.

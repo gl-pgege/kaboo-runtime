@@ -13,8 +13,9 @@ the server. This page shows where to stamp them.
 ## The seam: `enrich`
 
 Pass `enrich` to the runner. It runs before every run — chat turns,
-programmatic runs and resumes alike — and its return value **replaces** the
-client's `forwardedProps`, so keep client values by spreading
+programmatic runs and resumes alike — and returns what the server adds:
+`forwardedProps`, which **replace** the client's, and `state`, for server-owned
+keys the host vouches for. Keep client values by spreading
 `input.forwardedProps` first and leave out anything only the server may set:
 
 ```ts
@@ -30,9 +31,11 @@ const runner = createKabooRunner(new InMemoryThreadStore(), {
     const { workflow_config: _ignored, ...client } =
       (input.forwardedProps as Record<string, unknown> | undefined) ?? {};
     return {
-      ...client,
-      workflow_config: await configForThread(threadId), // the run's YAML
-      run_token: await mintRunToken(ownerId), // scoped, short-lived
+      forwardedProps: {
+        ...client,
+        workflow_config: await configForThread(threadId), // the run's YAML
+        run_token: await mintRunToken(ownerId), // scoped, short-lived
+      },
     };
   },
 });
@@ -42,7 +45,29 @@ const runtime = new CopilotRuntime({ agents: {}, runner });
 
 `enrich` receives the thread id, the agent id, the owner (from
 `accessPolicy.ownerOf`) and the run's input. If it throws, the run ends with an
-error and the agent never runs.
+error and the agent never runs. Without `forwardedProps` in its result the
+client's are kept.
+
+## State the server vouches for
+
+`state` in `enrich`'s result sets server-owned keys for this run, over the
+stored values; a browser's copy of those keys is never used. Use it for facts
+only the server knows that the agents should read as state, such as the person's
+plan or the workspace's current project:
+
+```ts
+import { createKabooRunner, InMemoryThreadStore } from "@pgege/kaboo-runtime";
+
+declare function projectSummary(threadId: string): Promise<Record<string, unknown>>;
+
+const runner = createKabooRunner(new InMemoryThreadStore(), {
+  stateKeys: { hidden: ["kaboo_sessions"], server: ["kaboo_workspace", "project"] },
+  enrich: async ({ threadId }) => ({ state: { project: await projectSummary(threadId) } }),
+});
+```
+
+See [Replay & state](replay-and-state.md#who-owns-each-state-key) for who owns
+each key.
 
 ## What belongs here
 
@@ -66,7 +91,7 @@ It is sent only when the runner has a grant store; see
 
 ## Resolving per turn, not per thread
 
-A continuation turn arrives with a thread id and nothing else, so `enrich` runs
+A follow-up turn arrives with a thread id and nothing else, so `enrich` runs
 on every turn rather than once at thread creation. Read the config from your
 database each time and an edit takes effect on the next turn, with no cache to
 invalidate. Persisting the exact string you sent alongside the run is worth the
@@ -74,7 +99,7 @@ column: it is the only record of what actually executed.
 
 ## What it does not carry
 
-Conversation state. History (`kaboo_history`) and pending approvals
-(`kaboo_session`) travel on the AG-UI state channel, which the runner replays
+Conversation state. The agents' transcripts and a paused run
+(`kaboo_sessions`) travel on the AG-UI state channel, which the runner replays
 from the store on its own — see [Replay & state](replay-and-state.md). Putting
-either in `forwardedProps` would fight the mechanism that already handles them.
+them in `forwardedProps` would fight the mechanism that already handles them.

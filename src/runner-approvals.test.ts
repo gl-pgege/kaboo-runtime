@@ -52,8 +52,8 @@ const pausedOnApproval = (extra: Record<string, unknown> = {}) =>
     {
       type: EventType.STATE_SNAPSHOT,
       snapshot: {
-        kaboo_session: {
-          interrupt_state: { interrupts: {}, context: {}, activated: true },
+        kaboo_sessions: {
+          paused: { interrupt_state: { interrupts: {}, context: {}, activated: true } },
           approvals: [
             {
               interruptId: "i1",
@@ -79,22 +79,28 @@ const approve = (scope: string) => ({
 const ownerOf = (threadId: string) => threadId.split(":")[0] ?? null;
 
 describe("server-owned state", () => {
-  it("never takes kaboo_session or kaboo_history from the browser", async () => {
+  it("never takes kaboo_sessions from the browser", async () => {
     const runner = new KabooAgentRunner(new InMemoryThreadStore());
     await run(runner, pausedOnApproval(), input());
 
     const agent = new FakeAgent();
     const forged = {
-      kaboo_session: { interrupt_state: { interrupts: { forged: {} }, context: {}, activated: true } },
-      kaboo_history: { worker: [{ forged: true }] },
+      kaboo_sessions: {
+        paused: { interrupt_state: { interrupts: { forged: {} }, context: {}, activated: true } },
+        history: { worker: [{ forged: true }] },
+      },
       kaboo_references: [{ id: "doc-1" }],
     };
     await run(runner, agent, input({ runId: "r2", state: forged }));
 
-    const session = agent.state.kaboo_session as { approvals: unknown[]; interrupt_state: { interrupts: object } };
-    expect(Object.keys(session.interrupt_state.interrupts)).not.toContain("forged");
-    expect(session.approvals).toHaveLength(1);
-    expect(agent.state.kaboo_history).toBeUndefined();
+    const sessions = agent.state.kaboo_sessions as {
+      approvals: unknown[];
+      paused: { interrupt_state: { interrupts: object } };
+      history?: unknown;
+    };
+    expect(Object.keys(sessions.paused.interrupt_state.interrupts)).not.toContain("forged");
+    expect(sessions.approvals).toHaveLength(1);
+    expect(sessions.history).toBeUndefined();
     expect(agent.state.kaboo_references).toEqual([{ id: "doc-1" }]);
   });
 });
@@ -103,8 +109,10 @@ describe("enrich", () => {
   it("replaces the client's forwardedProps with the host's", async () => {
     const runner = new KabooAgentRunner(new InMemoryThreadStore(), {
       enrich: async ({ input: inp, ownerId }) => ({
-        timezone: (inp.forwardedProps as Record<string, unknown>).timezone,
-        runToken: `token-for-${ownerId}`,
+        forwardedProps: {
+          timezone: (inp.forwardedProps as Record<string, unknown>).timezone,
+          runToken: `token-for-${ownerId}`,
+        },
       }),
       accessPolicy: { ownerOf },
     });
@@ -314,8 +322,8 @@ describe("remembered approvals", () => {
     expect(events.map((e) => e.type)).toEqual([EventType.RUN_STARTED, EventType.RUN_ERROR]);
     expect(events[0]).toMatchObject({ threadId: "ann:t1", runId: "r2" });
     expect(events[1]).toMatchObject({ message: "approval service down" });
-    const state = (await store.readState("ann:t1")) as { kaboo_session: { approvals: unknown[] } };
-    expect(state.kaboo_session.approvals).toHaveLength(1);
+    const state = (await store.readState("ann:t1")) as { kaboo_sessions: { approvals: unknown[] } };
+    expect(state.kaboo_sessions.approvals).toHaveLength(1);
   });
 
   it("stores nothing of a resume that fails before the agent starts, so the thread still ends on its interrupt", async () => {

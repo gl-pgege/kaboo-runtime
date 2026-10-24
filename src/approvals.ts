@@ -74,7 +74,7 @@ export interface GrantStore {
 
 /**
  * A person's answer to one approval request, matched against what the agent
- * actually asked (`kaboo_session.approvals`), never against client claims.
+ * actually asked (`kaboo_sessions.approvals`), never against client claims.
  */
 export interface ApprovalDecision {
   /** The AG-UI interrupt id answered. */
@@ -160,7 +160,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function openApprovals(state: Record<string, unknown> | null): Map<string, OpenApproval> {
   const open = new Map<string, OpenApproval>();
-  const session = state?.kaboo_session;
+  const session = state?.kaboo_sessions;
   const approvals = isRecord(session) ? session.approvals : undefined;
   if (!Array.isArray(approvals)) return open;
   for (const raw of approvals) {
@@ -189,8 +189,8 @@ function openApprovals(state: Record<string, unknown> | null): Map<string, OpenA
 
 /**
  * Match a run's `resume` entries against the approvals the agent is waiting
- * on (`state.kaboo_session.approvals`, as persisted from the agent's own
- * snapshot). Entries for anything else — questions, unknown ids — are
+ * on (`state.kaboo_sessions.approvals`, as persisted from the agent's own
+ * write-back). Entries for anything else — questions, unknown ids — are
  * ignored, a scope the request did not offer is narrowed to `once`, and a
  * tool's `request` id comes from the stored request, never from the payload.
  *
@@ -223,7 +223,7 @@ export function resolveApprovalDecisions(
       decisions.push({ ...base, decision: "expired" });
       continue;
     }
-    const payload = entry.status === "resolved" ? (entry.payload ?? { status: "approved" }) : null;
+    const payload = entry.status === "resolved" ? entry.payload : null;
     if (!isRecord(payload) || payload.skipped || payload.expired) {
       decisions.push({ ...base, decision: "skipped" });
     } else if (payload.status === "approved") {

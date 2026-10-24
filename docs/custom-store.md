@@ -28,7 +28,9 @@ and is kept in sync with this guide by a drift check:
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import type { BaseEvent, Message } from "@ag-ui/client";
 import {
+  compactRunEvents,
   deriveState,
+  finishedRunBounds,
   type ListThreadsFilter,
   type StoredThread,
   type ThreadStore,
@@ -45,12 +47,13 @@ interface Row {
 
 /**
  * A minimal ThreadStore that persists every thread to a single JSON file.
- * Demonstrates the extension point — events are stored verbatim and state is
- * derived with `deriveState`. Not tuned for concurrency or scale.
+ * Demonstrates the extension point — events are stored in order, a finished
+ * run is compacted with `compactRunEvents`, and state is derived with
+ * `deriveState`. Not tuned for concurrency or scale.
  *
  * `readState` is load-bearing rather than optional: the runner replays what it
- * returns into the next run, which is how a paused human-in-the-loop approval
- * (`kaboo_session`) survives the agent process restarting.
+ * returns into the next run, which is how a paused run (`kaboo_sessions`)
+ * survives the agent process restarting.
  */
 export class JsonFileThreadStore implements ThreadStore {
   private readonly data: Record<string, Row>;
@@ -86,6 +89,16 @@ export class JsonFileThreadStore implements ThreadStore {
     if (ownerId != null) row.ownerId = ownerId;
     row.events.push(...events);
     row.updatedAt = Date.now();
+    this.flush();
+  }
+
+  async compactRun(threadId: string, runId: string): Promise<void> {
+    const row = this.data[threadId];
+    const bounds = row && finishedRunBounds(row.events, runId);
+    if (!row || !bounds) return;
+    const [start, end] = bounds;
+    const run = row.events.slice(start, end + 1);
+    row.events.splice(start, run.length, ...compactRunEvents(run));
     this.flush();
   }
 

@@ -1,7 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { Observable, Subject, type Subscription } from "rxjs";
 import {
   AgentRunner,
-  finalizeRunEvents,
+  createRunEventFinalizer,
   type AgentRunnerConnectRequest,
   type AgentRunnerIsRunningRequest,
   type AgentRunnerRunRequest,
@@ -16,17 +17,10 @@ import {
   type KabooRunContext,
   type ToolGrant,
 } from "./approvals";
-import { replayableLog, withinLastRun } from "./replay";
+import { DEFAULT_STATE_KEYS, StateOwnership, type KabooStateKeys } from "./keys";
+import { replayableLog } from "./replay";
+import { applyStateDelta } from "./state";
 import type { ThreadStore } from "./store";
-
-/**
- * State keys kaboo-workflows writes and only the store may supply: pending
- * interrupts (`kaboo_session`) and sub-agent transcripts (`kaboo_history`). A
- * browser-sent copy is never used, so a client cannot forge a pending
- * approval or a transcript. Client-staged keys such as `kaboo_references`
- * still come from the browser.
- */
-const SERVER_STATE_KEYS = ["kaboo_session", "kaboo_history"] as const;
 
 /**
  * The agent as CopilotKit hands it over. CopilotKit pins its own
@@ -84,29 +78,50 @@ function buildMessageMetaEvents(input: RunAgentInput, known: Message[]): BaseEve
   });
 }
 
-/**
- * Event types `finalizeRunEvents` inspects to close dangling messages, tool
- * calls, and runs. Only these need to be tracked while a run streams — which
- * is what lets the runner stop retaining the full run in memory.
- */
-const LIFECYCLE_TYPES: ReadonlySet<EventType> = new Set([
-  EventType.TEXT_MESSAGE_START,
-  EventType.TEXT_MESSAGE_END,
-  EventType.TOOL_CALL_START,
-  EventType.TOOL_CALL_END,
-  EventType.TOOL_CALL_RESULT,
-  EventType.RUN_FINISHED,
-  EventType.RUN_ERROR,
-]);
+const MAX_CONTINUATIONS = 10;
+
+function waitsOnlyOn(finished: BaseEvent, answered: Set<string>): boolean {
+  const outcome = (finished as { outcome?: { type?: string; pendingToolCallIds?: string[] } }).outcome;
+  const pending = outcome?.type === "success" ? (outcome.pendingToolCallIds ?? []) : [];
+  return pending.length > 0 && pending.every((id) => answered.has(id));
+}
+
+function isProxiedMcpRequest(input: RunAgentInput): boolean {
+  const props = input.forwardedProps as Record<string, unknown> | undefined;
+  return Boolean(props && Object.prototype.hasOwnProperty.call(props, "__proxiedMCPRequest"));
+}
+
+function passThrough(agent: AgentRunnerRunRequest["agent"], input: RunAgentInput): Observable<BaseEvent> {
+  return new Observable<BaseEvent>((subscriber) => {
+    agent
+      .runAgent(input, { onEvent: ({ event }: { event: BaseEvent }) => subscriber.next(event) })
+      .then(
+        () => subscriber.complete(),
+        (error: unknown) => subscriber.error(error),
+      );
+  });
+}
 
 /**
- * Reduce an event to the fields `finalizeRunEvents` reads (`type`,
- * `messageId`, `toolCallId`), so tracking a run's lifecycle costs a few bytes
- * per event instead of retaining snapshot payloads.
+ * The input a run's `RUN_STARTED` is stamped with: the messages the run adds
+ * and any resume answers. A replay restores those messages from it, so a run
+ * that failed before the agent said anything still shows what was asked.
+ * Tools, state and `forwardedProps` stay out: they are large, already logged
+ * elsewhere, or carry credentials.
  */
-function lifecycleShadow(event: BaseEvent): BaseEvent {
-  const e = event as BaseEvent & { messageId?: unknown; toolCallId?: unknown };
-  return { type: event.type, messageId: e.messageId, toolCallId: e.toolCallId } as BaseEvent;
+function stampedInput(input: RunAgentInput, known: Message[]): RunAgentInput {
+  const knownIds = new Set(known.map((m) => m.id));
+  return {
+    threadId: input.threadId,
+    runId: input.runId,
+    ...(input.parentRunId ? { parentRunId: input.parentRunId } : {}),
+    state: {},
+    messages: (input.messages ?? []).filter((m) => !knownIds.has(m.id)),
+    tools: [],
+    context: input.context ?? [],
+    forwardedProps: {},
+    ...(input.resume ? { resume: input.resume } : {}),
+  } as RunAgentInput;
 }
 
 /**
@@ -282,17 +297,34 @@ export interface KabooRunnerOptions {
   /** Ownership hooks — see {@link KabooAccessPolicy}. */
   accessPolicy?: KabooAccessPolicy;
   /**
-   * Build the run's `forwardedProps` from values the host vouches for —
-   * run-scoped credentials, the tenant, a composed workflow. The returned
-   * object replaces the client's `forwardedProps` (start from
-   * `context.input.forwardedProps` to keep client values), so a client cannot
-   * smuggle in what only the host may set. Awaited before the run starts; if
-   * it throws, the run ends with an error. `kaboo_grants` is always set by the
-   * runner, never taken from here or the client.
+   * Add what the host vouches for to a run — run-scoped credentials, the
+   * tenant, a composed workflow, a server-owned state value. Awaited before
+   * the run starts; if it throws, the run ends with an error.
    */
-  enrich?: (context: KabooRunContext) => Record<string, unknown> | Promise<Record<string, unknown>>;
+  enrich?: (context: KabooRunContext) => KabooEnrichment | Promise<KabooEnrichment>;
   /** Remembered tool approvals — see {@link KabooApprovalOptions}. */
   approvals?: KabooApprovalOptions;
+  /**
+   * Which state keys the server owns. Defaults to {@link DEFAULT_STATE_KEYS}:
+   * kaboo-workflows' sessions hidden, its workspace visible.
+   */
+  stateKeys?: KabooStateKeys;
+}
+
+/** What {@link KabooRunnerOptions.enrich} adds to a run. */
+export interface KabooEnrichment {
+  /**
+   * Replaces the client's `forwardedProps`, so a client cannot smuggle in what
+   * only the host may set (start from `context.input.forwardedProps` to keep
+   * client values). Omit to keep the client's. `kaboo_grants` is always set by
+   * the runner.
+   */
+  forwardedProps?: Record<string, unknown>;
+  /**
+   * State values set for this run over the merged state, server-owned keys
+   * included. This is the only way a server key changes outside the agent.
+   */
+  state?: Record<string, unknown>;
 }
 
 interface ThreadRuntime {
@@ -329,10 +361,15 @@ interface ThreadRuntime {
  *
  * On each run it injects the thread's persisted state into the run, so anything
  * kaboo-workflows keeps there is seeded from the store rather than the browser:
- * `kaboo_history` for multi-agent transcripts, and `kaboo_session` for pending
- * interrupts — which is what lets an approval survive a restart of the agent
- * service. Unlike the stock in-memory runner, events are NOT compacted, so
- * `ACTIVITY_SNAPSHOT` / `CUSTOM` events survive for a full UI replay.
+ * `kaboo_sessions`, every agent's transcript and the paused checkpoint — which
+ * is what lets an approval survive a restart of the agent service. Server-owned
+ * keys never come from the browser ({@link KabooRunnerOptions.stateKeys}).
+ *
+ * A finished run is compacted with AG-UI's `compactEvents`, which replays to
+ * the same transcript and cards. A run that ends waiting only on calls it
+ * answered itself — an MCP App's tool, run by CopilotKit's middleware — goes on
+ * with the agent in the same run. MCP Apps' own requests pass straight through,
+ * unrecorded.
  *
  * @example
  * ```ts
@@ -351,6 +388,7 @@ export class KabooAgentRunner extends AgentRunner {
 
   private readonly cache = new Map<string, ThreadRuntime>();
   private readonly sealing = new Set<string>();
+  private readonly ownership: StateOwnership;
 
   /**
    * @param store - Where to persist and read each thread's event log.
@@ -361,6 +399,7 @@ export class KabooAgentRunner extends AgentRunner {
     private readonly options: KabooRunnerOptions = {},
   ) {
     super();
+    this.ownership = new StateOwnership(options.stateKeys ?? DEFAULT_STATE_KEYS);
   }
 
   /**
@@ -414,29 +453,23 @@ export class KabooAgentRunner extends AgentRunner {
   }
 
   /**
-   * Merge the thread's persisted state under the caller's for this run.
-   *
-   * The caller's state wins for ordinary keys, but the {@link SERVER_STATE_KEYS}
-   * come only from the store: a browser-sent `kaboo_session` could otherwise
-   * forge a pending approval with input the agent never proposed.
+   * The state the run starts with ({@link StateOwnership.merge}): the
+   * browser's keys from the client, the server's from the store, then the
+   * host's. A browser-sent server key is never used, so a client cannot forge
+   * a session or the workspace.
    *
    * The merged state is written back onto the *agent*, not just the returned
    * input. `AbstractAgent.prepareRunAgentInput` builds the wire payload from
    * `this.state` and ignores `input.state` entirely, so setting the field alone
-   * is silently dropped — which used to make this whole injection a no-op, and
-   * left every host to replay state itself.
+   * is silently dropped.
    */
   private injectState(
     agent: RunnerAgent,
     input: RunAgentInput,
     persisted: Record<string, unknown> | null,
+    host: Record<string, unknown> | undefined,
   ): RunAgentInput {
-    const inputState = input.state && typeof input.state === "object" ? input.state : {};
-    const merged: Record<string, unknown> = { ...(persisted ?? {}), ...(inputState as Record<string, unknown>) };
-    for (const key of SERVER_STATE_KEYS) {
-      if (persisted && key in persisted) merged[key] = persisted[key];
-      else delete merged[key];
-    }
+    const merged = this.ownership.merge(persisted, input.state, host);
     // Guarded because the runner accepts whatever CopilotKit hands it, which may
     // be a duck-typed agent that reads `input.state` instead.
     if (typeof agent.setState === "function") agent.setState(merged);
@@ -444,18 +477,18 @@ export class KabooAgentRunner extends AgentRunner {
   }
 
   /**
-   * Settle what the run carries before the agent sees it: the host's
-   * `forwardedProps` ({@link KabooRunnerOptions.enrich}), the person's
-   * approval decisions (handed to {@link KabooApprovalOptions.onDecision},
-   * then saved as grants once it accepts them), and the permissions the agent
-   * may use (`kaboo_grants`, replacing anything the client sent).
+   * Settle what the run carries before the agent sees it: what the host adds
+   * ({@link KabooRunnerOptions.enrich}), the person's approval decisions
+   * (handed to {@link KabooApprovalOptions.onDecision}, then saved as grants
+   * once it accepts them), and the permissions the agent may use
+   * (`kaboo_grants`, replacing anything the client sent).
    */
   private async prepareInput(
     threadId: string,
     record: ThreadRuntime,
     input: RunAgentInput,
     persisted: Record<string, unknown> | null,
-  ): Promise<RunAgentInput> {
+  ): Promise<{ input: RunAgentInput; hostState?: Record<string, unknown> }> {
     const context: KabooRunContext = {
       threadId,
       agentId: record.agentId,
@@ -466,9 +499,8 @@ export class KabooAgentRunner extends AgentRunner {
       input.forwardedProps && typeof input.forwardedProps === "object"
         ? (input.forwardedProps as Record<string, unknown>)
         : {};
-    const forwardedProps: Record<string, unknown> = {
-      ...(this.options.enrich ? await this.options.enrich(context) : clientProps),
-    };
+    const enrichment = this.options.enrich ? await this.options.enrich(context) : {};
+    const forwardedProps: Record<string, unknown> = { ...(enrichment.forwardedProps ?? clientProps) };
     delete forwardedProps[KABOO_GRANTS_PROP];
 
     const approvals = this.options.approvals;
@@ -500,7 +532,7 @@ export class KabooAgentRunner extends AgentRunner {
         }));
       }
     }
-    return { ...input, forwardedProps };
+    return { input: { ...input, forwardedProps }, hostState: enrichment.state };
   }
 
   private reportStoreError(error: unknown, threadId: string, op: string): void {
@@ -530,6 +562,7 @@ export class KabooAgentRunner extends AgentRunner {
    */
   run(request: AgentRunnerRunRequest): Observable<BaseEvent> {
     const { threadId, agent, input } = request;
+    if (isProxiedMcpRequest(input)) return passThrough(agent, input);
     const record = this.getOrCreate(threadId, agent.agentId ?? "default");
     if (record.running) {
       throw new Error(`Thread ${threadId} is already running`);
@@ -566,30 +599,43 @@ export class KabooAgentRunner extends AgentRunner {
       return () => sub.unsubscribe();
     });
     const emit = (event: BaseEvent) => {
-      if (backlog) backlog.push(event);
-      else out.next(event);
+      const visible = this.ownership.visible(event);
+      if (!visible) return;
+      if (backlog) backlog.push(visible);
+      else out.next(visible);
     };
 
-    // Compact lifecycle shadow: everything finalizeRunEvents needs to close a
-    // run, without retaining the (potentially huge) events themselves.
-    const shadow: BaseEvent[] = [];
-    let finalizing = false;
+    // Tracks what is open so a run that ends early can be closed, without
+    // retaining the (potentially huge) events themselves.
+    const finalizer = createRunEventFinalizer();
+    const stamp = stampedInput(input, record.messages);
+    let protocolVersion: string | undefined;
     let started = false;
     let unrecorded = false;
-    const accept = (event: BaseEvent) => {
+    const opened = (event: BaseEvent) => {
       if (event.timestamp == null) event.timestamp = Date.now();
-      if (event.type === EventType.RUN_STARTED) started = true;
-      if (!finalizing && LIFECYCLE_TYPES.has(event.type)) shadow.push(lifecycleShadow(event));
+      if (event.type === EventType.RUN_STARTED) {
+        started = true;
+        const startedEvent = event as BaseEvent & { protocolVersion?: string; input?: RunAgentInput };
+        protocolVersion = startedEvent.protocolVersion;
+        startedEvent.input = stamp;
+      }
+      finalizer.observe(event);
+    };
+    const accept = (event: BaseEvent) => {
+      opened(event);
       if (event.type === EventType.STATE_SNAPSHOT) {
         const snapshot = (event as { snapshot?: unknown }).snapshot;
         if (snapshot && typeof snapshot === "object") record.state = snapshot as Record<string, unknown>;
+      } else if (event.type === EventType.STATE_DELTA) {
+        record.state = applyStateDelta(record.state, (event as { delta?: unknown }).delta);
       }
       record.hasEvents = true;
       persistence.accept(event);
       emit(event);
     };
     const announce = (event: BaseEvent) => {
-      if (event.timestamp == null) event.timestamp = Date.now();
+      opened(event);
       persistence.announce(event);
       emit(event);
     };
@@ -599,34 +645,53 @@ export class KabooAgentRunner extends AgentRunner {
         await this.hydrateThread(threadId);
         const persisted = record.state ?? (await this.store.readState(threadId));
         const prepared = await this.prepareInput(threadId, record, input, persisted);
-        const mergedInput = this.injectState(agent, prepared, persisted);
+        const mergedInput = this.injectState(agent, prepared.input, persisted, prepared.hostState);
         // Message-meta events trail the agent's first event (RUN_STARTED)
         // rather than leading it: AG-UI clients validate that a run's stream
         // opens with RUN_STARTED, so leading CUSTOM events would be rejected.
         const metaEvents = buildMessageMetaEvents(mergedInput, record.messages);
         let metaPending = metaEvents.length > 0;
-        await agent.runAgent(mergedInput, {
-          onEvent: ({ event }: { event: BaseEvent }) => {
-            accept(event);
-            if (metaPending) {
-              metaPending = false;
-              for (const meta of metaEvents) accept(meta);
-            }
-          },
-        });
-        finalizing = true;
-        for (const event of finalizeRunEvents(shadow, { stopRequested: record.stopRequested })) {
+        let rounds = 0;
+        let goOn = false;
+        const answered = new Set<string>();
+        const onEvent = ({ event }: { event: BaseEvent }) => {
+          // An aborted client reports its own RUN_ERROR; a stop ends as cancelled instead.
+          if (record.stopRequested && event.type === EventType.RUN_ERROR) return;
+          if (event.type === EventType.TOOL_CALL_RESULT) answered.add((event as unknown as { toolCallId: string }).toolCallId);
+          if (
+            event.type === EventType.RUN_FINISHED &&
+            rounds < MAX_CONTINUATIONS &&
+            !record.stopRequested &&
+            waitsOnlyOn(event, answered)
+          ) {
+            goOn = true;
+            return;
+          }
+          if (rounds > 0 && event.type === EventType.RUN_STARTED) return;
+          accept(rounds > 0 && event.type === EventType.RUN_FINISHED ? ({ ...event, runId: input.runId } as BaseEvent) : event);
+          if (metaPending) {
+            metaPending = false;
+            for (const meta of metaEvents) accept(meta);
+          }
+        };
+        await agent.runAgent(mergedInput, { onEvent });
+        while (goOn) {
+          goOn = false;
+          rounds += 1;
+          await agent.runAgent({ ...mergedInput, runId: randomUUID(), resume: undefined }, { onEvent });
+        }
+        for (const event of finalizer.finalize({ stopRequested: record.stopRequested, protocolVersion })) {
           accept(event);
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        finalizing = true;
         unrecorded = !started && Array.isArray(input.resume) && input.resume.length > 0;
         const send = unrecorded ? announce : accept;
         if (!started) send({ type: EventType.RUN_STARTED, threadId, runId: input.runId } as BaseEvent);
-        for (const event of finalizeRunEvents(shadow, {
+        for (const event of finalizer.finalize({
           stopRequested: record.stopRequested,
           interruptionMessage: message,
+          protocolVersion,
         })) {
           send(event);
         }
@@ -651,6 +716,11 @@ export class KabooAgentRunner extends AgentRunner {
         completed = true;
         persistence.complete();
         out.complete();
+        if (!unrecorded) {
+          void this.store
+            .compactRun(threadId, input.runId)
+            .catch((error) => this.reportStoreError(error, threadId, "compact"));
+        }
       }
     };
 
@@ -677,6 +747,10 @@ export class KabooAgentRunner extends AgentRunner {
     return new Observable<BaseEvent>((subscriber) => {
       let liveSub: Subscription | null = null;
       let cancelled = false;
+      const send = (event: BaseEvent) => {
+        const visible = this.ownership.visible(event);
+        if (visible) subscriber.next(visible);
+      };
       void (async () => {
         const record = this.cache.get(threadId);
         const run = record?.running ? record.run : null;
@@ -688,11 +762,9 @@ export class KabooAgentRunner extends AgentRunner {
               if (cancelled) return;
               // Same tick as the subscription below, so nothing can interleave:
               // the store + unpersisted tail + live feed join up gap-free.
-              for (const event of replayableLog([...stored, ...run.unpersisted], threadId)) {
-                subscriber.next(event);
-              }
+              for (const event of replayableLog([...stored, ...run.unpersisted])) send(event);
               liveSub = run.live.subscribe({
-                next: (event) => subscriber.next(event),
+                next: send,
                 error: (error) => subscriber.error(error),
                 complete: () => subscriber.complete(),
               });
@@ -703,10 +775,7 @@ export class KabooAgentRunner extends AgentRunner {
             const stored = await this.store.readEvents(threadId);
             if (cancelled) return;
             const sealed = this.sealDanglingRun(threadId, stored);
-            const reconciled = await this.reconcileLostMessages(threadId, stored);
-            if (cancelled) return;
-            const replay = withinLastRun(replayableLog([...stored, ...sealed], threadId), reconciled, threadId);
-            for (const event of replay) subscriber.next(event);
+            for (const event of replayableLog([...stored, ...sealed])) send(event);
             subscriber.complete();
           }
         } catch (error) {
@@ -739,8 +808,9 @@ export class KabooAgentRunner extends AgentRunner {
     if (tail.some((e) => e.type === EventType.RUN_FINISHED || e.type === EventType.RUN_ERROR)) {
       return [];
     }
-    const shadow = tail.filter((e) => LIFECYCLE_TYPES.has(e.type)).map(lifecycleShadow);
-    const appended = finalizeRunEvents(shadow, {});
+    const finalizer = createRunEventFinalizer();
+    for (const event of tail) finalizer.observe(event);
+    const appended = finalizer.finalize({});
     const now = Date.now();
     for (const event of appended) {
       if (event.timestamp == null) event.timestamp = now;
@@ -754,49 +824,6 @@ export class KabooAgentRunner extends AgentRunner {
         .finally(() => this.sealing.delete(threadId));
     }
     return appended;
-  }
-
-  /**
-   * Recover messages the event log lost. A run that errors before its agent
-   * emits anything (bad config, unreachable backend) leaves only
-   * `RUN_STARTED` / `RUN_ERROR` in the log, yet the derived message snapshot —
-   * persisted even on failure — still holds the run's input messages. A replay
-   * of such a log renders the conversation without those messages. When the
-   * snapshot contains message ids the log never materializes, close the replay
-   * with a `MESSAGES_SNAPSHOT` (placed inside the last run, see
-   * `withinLastRun`) so the client shows the full conversation.
-   * No-op (and zero risk) when the log already covers every snapshot message.
-   */
-  private async reconcileLostMessages(threadId: string, stored: BaseEvent[]): Promise<BaseEvent[]> {
-    let messages: Message[];
-    try {
-      messages = await this.store.readMessages(threadId);
-    } catch (error) {
-      this.reportStoreError(error, threadId, "reconcile");
-      return [];
-    }
-    if (messages.length === 0) return [];
-    const seen = new Set<string>();
-    for (const event of stored) {
-      // CUSTOM events (message meta) reference ids without materializing
-      // messages on the client, so they don't count as coverage.
-      if (event.type === EventType.CUSTOM) continue;
-      const e = event as BaseEvent & { messageId?: unknown; messages?: unknown };
-      if (typeof e.messageId === "string") seen.add(e.messageId);
-      if (event.type === EventType.MESSAGES_SNAPSHOT && Array.isArray(e.messages)) {
-        for (const m of e.messages) {
-          const id = (m as { id?: unknown })?.id;
-          if (typeof id === "string") seen.add(id);
-        }
-      }
-    }
-    const lost = messages.some(
-      (m) => typeof m.id === "string" && m.id.length > 0 && !seen.has(m.id),
-    );
-    if (!lost) return [];
-    return [
-      { type: EventType.MESSAGES_SNAPSHOT, messages, timestamp: Date.now() } as unknown as BaseEvent,
-    ];
   }
 
   /**
@@ -888,18 +915,18 @@ export class KabooAgentRunner extends AgentRunner {
    */
   getThreadEvents(threadId: string): BaseEvent[] {
     const run = this.cache.get(threadId)?.run;
-    return run ? [...run.unpersisted] : [];
+    return run ? run.unpersisted.flatMap((event) => this.ownership.visible(event) ?? []) : [];
   }
 
   /**
-   * Get a thread's latest state (from its last `STATE_SNAPSHOT`), folded
+   * Get a thread's latest state as the browser may see it, folded
    * incrementally as runs stream and hydrated from the store on cold start.
    *
    * @param threadId - The thread to read.
-   * @returns The latest state, or `null` when unknown or never emitted.
+   * @returns The latest state without hidden keys, or `null` when unknown or never emitted.
    */
   getThreadState(threadId: string): Record<string, unknown> | null {
-    return this.cache.get(threadId)?.state ?? null;
+    return this.ownership.visibleState(this.cache.get(threadId)?.state ?? null);
   }
 
   /**
