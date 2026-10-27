@@ -24,6 +24,7 @@
 - [KabooApprovalOptions](interfaces/KabooApprovalOptions.md)
 - [KabooEnrichment](interfaces/KabooEnrichment.md)
 - [KabooRunContext](interfaces/KabooRunContext.md)
+- [KabooRunEnd](interfaces/KabooRunEnd.md)
 - [KabooRunnerOptions](interfaces/KabooRunnerOptions.md)
 - [KabooStateKeys](interfaces/KabooStateKeys.md)
 - [ListThreadsFilter](interfaces/ListThreadsFilter.md)
@@ -50,9 +51,12 @@
 ## Functions
 
 - [applyStateDelta](functions/applyStateDelta.md)
+- [compactForReplay](functions/compactForReplay.md)
 - [compactRunEvents](functions/compactRunEvents.md)
 - [createKabooRunner](functions/createKabooRunner.md)
 - [deriveState](functions/deriveState.md)
 - [finishedRunBounds](functions/finishedRunBounds.md)
+- [foldReasoning](functions/foldReasoning.md)
+- [mergeDeltas](functions/mergeDeltas.md)
 - [replayableLog](functions/replayableLog.md)
 - [resolveApprovalDecisions](functions/resolveApprovalDecisions.md)

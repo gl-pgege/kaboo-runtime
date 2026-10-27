@@ -20,7 +20,7 @@ import {
 import { DEFAULT_STATE_KEYS, StateOwnership, type KabooStateKeys } from "./keys";
 import { replayableLog } from "./replay";
 import { applyStateDelta } from "./state";
-import type { ThreadStore } from "./store";
+import { compactForReplay, mergeDeltas, type ThreadStore } from "./store";
 
 /**
  * The agent as CopilotKit hands it over. CopilotKit pins its own
@@ -309,6 +309,28 @@ export interface KabooRunnerOptions {
    * kaboo-workflows' sessions hidden, its workspace visible.
    */
   stateKeys?: KabooStateKeys;
+  /**
+   * Called once a run has ended, however it ended, when the agent is done
+   * rather than when the client's stream closes. Errors are reported to
+   * {@link KabooRunnerOptions.onStoreError} and never reach the run.
+   */
+  onRunEnd?: (end: KabooRunEnd) => void | Promise<void>;
+  /**
+   * How many idle threads keep their messages and state in memory; the least
+   * recently used beyond it are dropped and read from the store again when a
+   * run or connect needs them. Unlimited by default.
+   */
+  maxCachedThreads?: number;
+}
+
+/** How a run ended, for {@link KabooRunnerOptions.onRunEnd}. */
+export interface KabooRunEnd {
+  /** The thread the run belonged to. */
+  threadId: string;
+  /** The run's id, as the client sent it. */
+  runId: string;
+  /** `finished`, `failed` (an error or a `RUN_ERROR`) or `stopped` (a stop request). */
+  outcome: "finished" | "failed" | "stopped";
 }
 
 /** What {@link KabooRunnerOptions.enrich} adds to a run. */
@@ -410,13 +432,43 @@ export class KabooAgentRunner extends AgentRunner {
    */
   async hydrate(): Promise<void> {
     const threads = await this.store.listThreads();
-    for (const t of threads) {
+    const cached = this.options.maxCachedThreads ?? Number.POSITIVE_INFINITY;
+    for (const [index, t] of [...threads].sort((a, b) => b.updatedAt - a.updatedAt).entries()) {
       const record = this.getOrCreate(t.id, t.agentId);
       record.createdAt = t.createdAt;
       record.updatedAt = t.updatedAt;
       record.ownerId = t.ownerId ?? record.ownerId;
       record.hasEvents = true;
-      await this.hydrateThread(t.id);
+      if (index < cached) await this.hydrateThread(t.id);
+    }
+  }
+
+  /**
+   * Wait for every run in flight to end, for at most `timeoutMs`, so a host
+   * shutting down does not cut runs off. Resolves `true` when none is left.
+   *
+   * @param timeoutMs - The longest to wait.
+   * @returns Whether every run ended in time.
+   */
+  async drain(timeoutMs = 60_000): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    while ([...this.cache.values()].some((record) => record.running)) {
+      if (Date.now() >= deadline) return false;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    return true;
+  }
+
+  private evictIdle(): void {
+    const cached = this.options.maxCachedThreads;
+    if (cached === undefined) return;
+    const idle = [...this.cache.entries()]
+      .filter(([, record]) => record.hydrated && !record.running)
+      .sort(([, a], [, b]) => b.updatedAt - a.updatedAt);
+    for (const [, record] of idle.slice(cached)) {
+      record.messages = [];
+      record.state = null;
+      record.hydrated = false;
     }
   }
 
@@ -575,9 +627,10 @@ export class KabooAgentRunner extends AgentRunner {
     record.ownerId = record.ownerId ?? this.resolveOwner(threadId);
 
     const persistence = new RunPersistence(
-      (batch) => this.store.appendEvents(threadId, record.agentId, batch, record.ownerId),
+      (batch) => this.store.appendEvents(threadId, record.agentId, mergeDeltas(batch), record.ownerId),
       (error) => this.reportStoreError(error, threadId, "persist"),
     );
+    let outcome: KabooRunEnd["outcome"] = "finished";
     record.run = persistence;
 
     // Output stream for CopilotKit's response writer: buffer only until the
@@ -624,6 +677,7 @@ export class KabooAgentRunner extends AgentRunner {
     };
     const accept = (event: BaseEvent) => {
       opened(event);
+      if (event.type === EventType.RUN_ERROR) outcome = "failed";
       if (event.type === EventType.STATE_SNAPSHOT) {
         const snapshot = (event as { snapshot?: unknown }).snapshot;
         if (snapshot && typeof snapshot === "object") record.state = snapshot as Record<string, unknown>;
@@ -684,6 +738,7 @@ export class KabooAgentRunner extends AgentRunner {
           accept(event);
         }
       } catch (error) {
+        outcome = "failed";
         const message = error instanceof Error ? error.message : String(error);
         unrecorded = !started && Array.isArray(input.resume) && input.resume.length > 0;
         const send = unrecorded ? announce : accept;
@@ -709,6 +764,7 @@ export class KabooAgentRunner extends AgentRunner {
             this.reportStoreError(error, threadId, "persist");
           }
         }
+        if (record.stopRequested) outcome = "stopped";
         record.running = false;
         record.stopRequested = false;
         record.agent = null;
@@ -721,6 +777,13 @@ export class KabooAgentRunner extends AgentRunner {
             .compactRun(threadId, input.runId)
             .catch((error) => this.reportStoreError(error, threadId, "compact"));
         }
+        const onRunEnd = this.options.onRunEnd;
+        if (onRunEnd) {
+          void Promise.resolve()
+            .then(() => onRunEnd({ threadId, runId: input.runId, outcome }))
+            .catch((error) => this.reportStoreError(error, threadId, "run-end"));
+        }
+        this.evictIdle();
       }
     };
 
@@ -775,7 +838,7 @@ export class KabooAgentRunner extends AgentRunner {
             const stored = await this.store.readEvents(threadId);
             if (cancelled) return;
             const sealed = this.sealDanglingRun(threadId, stored);
-            for (const event of replayableLog([...stored, ...sealed])) send(event);
+            for (const event of replayableLog(compactForReplay([...stored, ...sealed]))) send(event);
             subscriber.complete();
           }
         } catch (error) {

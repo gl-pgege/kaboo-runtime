@@ -15,11 +15,33 @@ export type ThreadState = Record<string, unknown>;
 export function applyStateDelta(state: ThreadState | null, delta: unknown): ThreadState | null {
   if (!Array.isArray(delta) || delta.length === 0) return state;
   try {
-    const result = applyPatch(structuredClone(state ?? {}), delta as Operation[], false, false).newDocument;
+    const operations = delta as Operation[];
+    const result = applyPatch(touchedCopy(state ?? {}, operations), operations, false, true).newDocument;
     return result && typeof result === "object" && !Array.isArray(result) ? (result as ThreadState) : state;
   } catch {
     return state;
   }
+}
+
+function topKey(path: unknown): string | null {
+  if (typeof path !== "string" || !path.startsWith("/")) return null;
+  const segment = path.slice(1).split("/")[0];
+  return segment ? segment.replaceAll("~1", "/").replaceAll("~0", "~") : null;
+}
+
+/**
+ * A copy of the state the patch can change in place: the top-level values it
+ * touches are cloned, the rest shared, so a delta to one key does not copy
+ * every agent's transcript.
+ */
+function touchedCopy(state: ThreadState, operations: Operation[]): ThreadState {
+  const keys = operations.flatMap((op) => [op.path, (op as { from?: string }).from].map(topKey));
+  if (keys.some((key, index) => key === null && index % 2 === 0)) return structuredClone(state);
+  const copy: ThreadState = { ...state };
+  for (const key of new Set(keys)) {
+    if (key !== null && key in copy) copy[key] = structuredClone(copy[key]);
+  }
+  return copy;
 }
 
 /**

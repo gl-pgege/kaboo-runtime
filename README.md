@@ -18,10 +18,14 @@ already mount CopilotKit with.
 
 ## Features
 
-- **Event log** — the whole AG-UI run stream is persisted, each finished run
-  compacted with AG-UI's `compactEvents`, which replays to the same transcript.
-- **Replay on reload** — reconnecting a thread replays stored turns, then tees
-  any in-flight run.
+- **Event log** — the whole AG-UI run stream is persisted in batches, each
+  batch's deltas joined, and each finished run compacted with AG-UI's
+  `compactEvents`, reasoning folded, which replays to the same transcript.
+- **Replay on reload** — reconnecting a thread replays what the client still
+  needs (the last snapshots, joined deltas), then tees any in-flight run.
+- **Run lifecycle** — `onRunEnd` reports how each run ended once the agent is
+  done, `drain` waits for runs on shutdown, and `maxCachedThreads` bounds the
+  threads kept in memory.
 - **Server-owned state** — each run's persisted state is injected into
   `input.state`. kaboo-workflows' sessions (`kaboo_sessions`) never reach the
   browser, its workspace (`kaboo_workspace`) reaches it read-only, and the

@@ -94,6 +94,82 @@ export function finishedRunBounds(events: readonly BaseEvent[], runId: string): 
  * Returns the input when compaction would not shrink it.
  */
 export function compactRunEvents(events: BaseEvent[]): BaseEvent[] {
-  const compacted = compactEvents(events);
+  const compacted = foldReasoning(compactEvents(events));
   return compacted.length < events.length ? compacted : events;
+}
+
+const DELTAS: Partial<Record<string, string>> = {
+  [EventType.TEXT_MESSAGE_CONTENT]: "messageId",
+  [EventType.TOOL_CALL_ARGS]: "toolCallId",
+  [EventType.REASONING_MESSAGE_CONTENT]: "messageId",
+};
+
+type Delta = BaseEvent & { delta?: string } & Record<string, unknown>;
+
+/**
+ * Join neighbouring deltas of one message or tool call into one event, so a
+ * batch of streamed tokens is stored as one row. The joined events replay the
+ * same text and arguments.
+ */
+export function mergeDeltas(events: BaseEvent[]): BaseEvent[] {
+  const merged: BaseEvent[] = [];
+  for (const event of events) {
+    const key = DELTAS[event.type];
+    const last = merged[merged.length - 1] as Delta | undefined;
+    if (key && last && last.type === event.type && last[key] === (event as Delta)[key]) {
+      merged[merged.length - 1] = { ...last, delta: `${last.delta ?? ""}${(event as Delta).delta ?? ""}` };
+    } else {
+      merged.push(event);
+    }
+  }
+  return merged;
+}
+
+/**
+ * Join every reasoning delta of a message into its first, which `compactEvents`
+ * leaves as streamed.
+ */
+export function foldReasoning(events: BaseEvent[]): BaseEvent[] {
+  const first = new Map<unknown, number>();
+  const folded: BaseEvent[] = [];
+  for (const event of events) {
+    if (event.type !== EventType.REASONING_MESSAGE_CONTENT) {
+      folded.push(event);
+      continue;
+    }
+    const delta = event as Delta;
+    const at = first.get(delta.messageId);
+    if (at === undefined) {
+      first.set(delta.messageId, folded.length);
+      folded.push(event);
+    } else {
+      const head = folded[at] as Delta;
+      folded[at] = { ...head, delta: `${head.delta ?? ""}${delta.delta ?? ""}` };
+    }
+  }
+  return folded;
+}
+
+const LEGACY_ACTIVITY = "kaboo.activity";
+
+/**
+ * What a reconnecting client needs from a thread's log: only the last messages
+ * snapshot and the last state snapshot (with the deltas after it), without the
+ * activity events of runtimes before 0.8, which nothing renders, and with
+ * deltas joined.
+ */
+export function compactForReplay(events: BaseEvent[]): BaseEvent[] {
+  let lastMessages = -1;
+  let lastState = -1;
+  events.forEach((event, index) => {
+    if (event.type === EventType.MESSAGES_SNAPSHOT) lastMessages = index;
+    if (event.type === EventType.STATE_SNAPSHOT) lastState = index;
+  });
+  const kept = events.filter((event, index) => {
+    if ((event as { activityType?: unknown }).activityType === LEGACY_ACTIVITY) return false;
+    if (event.type === EventType.MESSAGES_SNAPSHOT) return index === lastMessages;
+    if (event.type === EventType.STATE_SNAPSHOT || event.type === EventType.STATE_DELTA) return index >= lastState;
+    return true;
+  });
+  return foldReasoning(compactEvents(kept));
 }

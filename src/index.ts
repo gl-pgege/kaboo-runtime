@@ -1,5 +1,5 @@
 export type { ThreadStore, StoredThread, ListThreadsFilter } from "./store";
-export { compactRunEvents, finishedRunBounds } from "./store";
+export { compactForReplay, compactRunEvents, finishedRunBounds, foldReasoning, mergeDeltas } from "./store";
 export { applyStateDelta, deriveState } from "./state";
 export type { ThreadState } from "./state";
 export { DEFAULT_STATE_KEYS, StateOwnership } from "./keys";
@@ -10,7 +10,7 @@ export { PostgresThreadStore } from "./stores/postgres";
 export type { PostgresThreadStoreOptions } from "./stores/postgres";
 export { KabooHttpAgent } from "./agent";
 export { KabooAgentRunner, createKabooRunner, MESSAGE_META_EVENT } from "./runner";
-export type { KabooEnrichment, KabooRunnerOptions, KabooAccessPolicy, MessageMeta } from "./runner";
+export type { KabooEnrichment, KabooRunEnd, KabooRunnerOptions, KabooAccessPolicy, MessageMeta } from "./runner";
 export { KABOO_GRANTS_PROP, resolveApprovalDecisions } from "./approvals";
 export type {
   ApprovalDecision,

@@ -121,12 +121,11 @@ export class PostgresThreadStore implements ThreadStore {
            owner_id = COALESCE(EXCLUDED.owner_id, kaboo_threads.owner_id)`,
         [threadId, agentId, now, ownerId ?? null],
       );
-      for (const event of events) {
-        await client.query(
-          `INSERT INTO kaboo_thread_events (thread_id, event) VALUES ($1, $2)`,
-          [threadId, toJsonbSafe(event)],
-        );
-      }
+      await client.query(
+        `INSERT INTO kaboo_thread_events (thread_id, event)
+         SELECT $1, event FROM unnest($2::jsonb[]) WITH ORDINALITY AS batch(event, n) ORDER BY n`,
+        [threadId, events.map(toJsonbSafe)],
+      );
       await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");
@@ -172,13 +171,11 @@ export class PostgresThreadStore implements ThreadStore {
           threadId,
           run.map((row) => row.seq),
         ]);
-        for (const [index, event] of compacted.entries()) {
-          await client.query(`INSERT INTO kaboo_thread_events (seq, thread_id, event) VALUES ($1, $2, $3)`, [
-            run[index].seq,
-            threadId,
-            toJsonbSafe(event),
-          ]);
-        }
+        await client.query(
+          `INSERT INTO kaboo_thread_events (seq, thread_id, event)
+           SELECT seq, $1, event FROM unnest($2::bigint[], $3::jsonb[]) AS batch(seq, event)`,
+          [threadId, compacted.map((_, index) => run[index].seq), compacted.map(toJsonbSafe)],
+        );
       }
       await client.query("COMMIT");
     } catch (error) {

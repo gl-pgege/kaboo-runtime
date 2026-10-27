@@ -6,7 +6,7 @@
 
 > **createKabooRunner**(`store`, `options?`): [`KabooAgentRunner`](../classes/KabooAgentRunner.md)
 
-Defined in: [src/runner.ts:981](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L981)
+Defined in: [src/runner.ts:1044](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L1044)
 
 Create a [KabooAgentRunner](../classes/KabooAgentRunner.md) bound to a [ThreadStore](../interfaces/ThreadStore.md). Pass the
 result to `new CopilotRuntime({ agents, runner })`.

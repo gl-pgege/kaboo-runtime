@@ -6,7 +6,7 @@
 
 > **deriveState**(`events`): [`ThreadState`](../type-aliases/ThreadState.md) \| `null`
 
-Defined in: [src/state.ts:42](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/state.ts#L42)
+Defined in: [src/state.ts:64](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/state.ts#L64)
 
 Derive a thread's latest state from its event log: the last
 `STATE_SNAPSHOT`, with every `STATE_DELTA` after it applied. Returns `null`

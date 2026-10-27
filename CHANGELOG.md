@@ -6,6 +6,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0]
+
+### Added
+
+- **`onRunEnd`** is called once a run has ended, with its `outcome`
+  (`finished`, `failed` or `stopped`), when the agent is done rather than when
+  the client's stream closes.
+- **`drain(timeoutMs)`** waits for the runs in flight, so a host shutting down
+  does not cut them off.
+- **`maxCachedThreads`** keeps the messages and state of only the most recently
+  used idle threads in memory; `hydrate` loads that many, and a run or connect
+  reads any other thread again. Unlimited by default.
+- `mergeDeltas`, `foldReasoning` and `compactForReplay` are exported.
+
+### Changed
+
+- **A connect replays what the client still needs:** the last messages
+  snapshot, the last state snapshot and the deltas after it, deltas joined, and
+  no activity events from runtimes before 0.8, which nothing renders. Runs that
+  were never compacted (a crash, an interrupted run) replay compacted too.
+- **Fewer, larger writes.** The deltas of each flushed batch are joined, and a
+  batch is one `INSERT`; a compacted run is rewritten with one `INSERT`.
+- **Reasoning deltas are folded** when a run is compacted, which
+  `compactEvents` leaves as streamed.
+- **A state delta copies only the keys it changes,** not the whole state with
+  every agent's transcript.
+
 ## [0.8.0]
 
 See [Upgrading](docs/upgrading.md#08).

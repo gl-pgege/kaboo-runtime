@@ -100,6 +100,33 @@ client aborts a run to send a new message) replays as finished — after closing
 any message or tool call it left open — and the turns after it stay visible. A terminal event outside any run is dropped, and messages the log lost
 are replayed inside the last run rather than after it.
 
+An idle thread's log is also compacted for the replay (`compactForReplay`): only
+the last `MESSAGES_SNAPSHOT` and the last `STATE_SNAPSHOT` with the deltas after
+it are sent, each message's deltas are joined, and activity events of runtimes
+before 0.8 (`kaboo.activity`), which nothing renders, are left out. A run that was
+never compacted, because the process stopped mid-run, replays compacted too.
+
+## Run lifecycle
+
+```ts
+import { KabooAgentRunner, InMemoryThreadStore } from "@pgege/kaboo-runtime";
+
+const runner = new KabooAgentRunner(new InMemoryThreadStore(), {
+  onRunEnd: ({ threadId, runId, outcome }) => console.log(threadId, runId, outcome),
+  maxCachedThreads: 50,
+});
+
+process.on("SIGTERM", () => void runner.drain(60_000).then(() => process.exit(0)));
+```
+
+- `onRunEnd` is called once the agent is done with a run, `finished`, `failed`
+  or `stopped`, whether or not a client is still reading the stream.
+- `drain(timeoutMs)` resolves once no run is in flight, or `false` at the
+  timeout.
+- `maxCachedThreads` keeps the messages and state of that many idle threads in
+  memory, the most recently used; the rest are read from the store again when a
+  run or connect needs them.
+
 ## A run that answered its own calls
 
 When an agent calls an MCP App's tool, the run ends waiting on the call, and

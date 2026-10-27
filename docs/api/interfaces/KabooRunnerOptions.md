@@ -52,6 +52,40 @@ the run starts; if it throws, the run ends with an error.
 
 ***
 
+### maxCachedThreads?
+
+> `optional` **maxCachedThreads?**: `number`
+
+Defined in: [src/runner.ts:323](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L323)
+
+How many idle threads keep their messages and state in memory; the least
+recently used beyond it are dropped and read from the store again when a
+run or connect needs them. Unlimited by default.
+
+***
+
+### onRunEnd?
+
+> `optional` **onRunEnd?**: (`end`) => `void` \| `Promise`\<`void`\>
+
+Defined in: [src/runner.ts:317](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/runner.ts#L317)
+
+Called once a run has ended, however it ended, when the agent is done
+rather than when the client's stream closes. Errors are reported to
+[KabooRunnerOptions.onStoreError](#onstoreerror) and never reach the run.
+
+#### Parameters
+
+##### end
+
+[`KabooRunEnd`](KabooRunEnd.md)
+
+#### Returns
+
+`void` \| `Promise`\<`void`\>
+
+***
+
 ### onStoreError?
 
 > `optional` **onStoreError?**: (`error`, `context`) => `void`

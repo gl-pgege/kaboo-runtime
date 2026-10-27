@@ -88,7 +88,7 @@ nullish value must preserve any owner already recorded.
 
 > **clear**(`threadId?`): `Promise`\<`void`\>
 
-Defined in: [src/stores/postgres.ts:262](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L262)
+Defined in: [src/stores/postgres.ts:259](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L259)
 
 Delete one thread's data, or all threads when `threadId` is omitted.
 
@@ -112,7 +112,7 @@ Delete one thread's data, or all threads when `threadId` is omitted.
 
 > **compactRun**(`threadId`, `runId`): `Promise`\<`void`\>
 
-Defined in: [src/stores/postgres.ts:139](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L139)
+Defined in: [src/stores/postgres.ts:138](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L138)
 
 Replace a finished run's events with [compactRunEvents](../functions/compactRunEvents.md) of them, in
 place: events appended after the run keep their position. A run that has
@@ -142,7 +142,7 @@ not finished, or is not in the log, is left alone.
 
 > **listThreads**(`filter?`): `Promise`\<[`StoredThread`](../interfaces/StoredThread.md)[]\>
 
-Defined in: [src/stores/postgres.ts:236](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L236)
+Defined in: [src/stores/postgres.ts:233](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L233)
 
 List persisted threads, most recently updated first. With
 `filter.ownerId`, only that subject's threads are returned.
@@ -167,7 +167,7 @@ List persisted threads, most recently updated first. With
 
 > **readEvents**(`threadId`): `Promise`\<`BaseEvent`[]\>
 
-Defined in: [src/stores/postgres.ts:192](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L192)
+Defined in: [src/stores/postgres.ts:189](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L189)
 
 Read the thread's full event log, in order.
 
@@ -191,7 +191,7 @@ Read the thread's full event log, in order.
 
 > **readMessages**(`threadId`): `Promise`\<`Message`[]\>
 
-Defined in: [src/stores/postgres.ts:227](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L227)
+Defined in: [src/stores/postgres.ts:224](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L224)
 
 Read the derived message snapshot for a thread.
 
@@ -215,7 +215,7 @@ Read the derived message snapshot for a thread.
 
 > **readState**(`threadId`): `Promise`\<`Record`\<`string`, `unknown`\> \| `null`\>
 
-Defined in: [src/stores/postgres.ts:201](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L201)
+Defined in: [src/stores/postgres.ts:198](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L198)
 
 Read the latest agent state (see `deriveState`), or `null`.
 
@@ -239,7 +239,7 @@ Read the latest agent state (see `deriveState`), or `null`.
 
 > **saveMessages**(`threadId`, `messages`): `Promise`\<`void`\>
 
-Defined in: [src/stores/postgres.ts:217](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L217)
+Defined in: [src/stores/postgres.ts:214](https://github.com/gl-pgege/kaboo-runtime/blob/main/src/stores/postgres.ts#L214)
 
 Persist the derived message snapshot for a thread.
 

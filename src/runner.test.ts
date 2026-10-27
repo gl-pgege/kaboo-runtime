@@ -262,7 +262,7 @@ describe("KabooAgentRunner", () => {
     const runner = new KabooAgentRunner(store);
     const events: BaseEvent[] = [
       { type: EventType.RUN_STARTED, threadId: "t1", runId: "r1" } as BaseEvent,
-      { type: EventType.ACTIVITY_SNAPSHOT, messageId: "a", activityType: "kaboo.activity", content: { groups: {} } } as unknown as BaseEvent,
+      { type: EventType.ACTIVITY_SNAPSHOT, messageId: "a", activityType: "a2ui-surface", content: { groups: {} } } as unknown as BaseEvent,
       { type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1" } as BaseEvent,
     ];
     await collect(runner.run(runReq("t1", new FakeAgent(events), input())));
@@ -273,6 +273,98 @@ describe("KabooAgentRunner", () => {
       EventType.ACTIVITY_SNAPSHOT,
       EventType.RUN_FINISHED,
     ]);
+  });
+
+  it("replays only what a client still needs: the last snapshots, joined deltas, no legacy activity", async () => {
+    const store = new InMemoryThreadStore();
+    const runner = new KabooAgentRunner(store);
+    const turn = (runId: string, text: string): BaseEvent[] => [
+      { type: EventType.RUN_STARTED, threadId: "t1", runId } as BaseEvent,
+      { type: EventType.ACTIVITY_DELTA, messageId: "a", activityType: "kaboo.activity", patch: [] } as unknown as BaseEvent,
+      { type: EventType.STATE_SNAPSHOT, snapshot: { turn: runId } } as BaseEvent,
+      { type: EventType.MESSAGES_SNAPSHOT, messages: [] } as BaseEvent,
+      { type: EventType.REASONING_MESSAGE_START, messageId: `why-${runId}`, role: "reasoning" } as BaseEvent,
+      { type: EventType.REASONING_MESSAGE_CONTENT, messageId: `why-${runId}`, delta: "think" } as BaseEvent,
+      { type: EventType.REASONING_MESSAGE_CONTENT, messageId: `why-${runId}`, delta: "ing" } as BaseEvent,
+      { type: EventType.REASONING_MESSAGE_END, messageId: `why-${runId}` } as BaseEvent,
+      { type: EventType.TEXT_MESSAGE_START, messageId: `m-${runId}`, role: "assistant" } as BaseEvent,
+      ...[...text].map((delta) => ({ type: EventType.TEXT_MESSAGE_CONTENT, messageId: `m-${runId}`, delta }) as BaseEvent),
+      { type: EventType.TEXT_MESSAGE_END, messageId: `m-${runId}` } as BaseEvent,
+      { type: EventType.RUN_FINISHED, threadId: "t1", runId } as BaseEvent,
+    ];
+    await store.appendEvents("t1", "default", [...turn("r1", "one"), ...turn("r2", "two")]);
+
+    const replayed = await collect(runner.connect({ threadId: "t1" }));
+
+    expect(replayed.some((e) => (e as { activityType?: string }).activityType === "kaboo.activity")).toBe(false);
+    expect(replayed.filter((e) => e.type === EventType.MESSAGES_SNAPSHOT)).toHaveLength(1);
+    expect(replayed.filter((e) => e.type === EventType.STATE_SNAPSHOT)).toEqual([
+      expect.objectContaining({ snapshot: { turn: "r2" } }),
+    ]);
+    expect(replayed.filter((e) => e.type === EventType.TEXT_MESSAGE_CONTENT).map((e) => (e as BaseEvent & { delta?: string }).delta)).toEqual(["one", "two"]);
+    expect(replayed.filter((e) => e.type === EventType.REASONING_MESSAGE_CONTENT).map((e) => (e as BaseEvent & { delta?: string }).delta)).toEqual(["thinking", "thinking"]);
+  });
+
+  it("stores the deltas of one batch as one row", async () => {
+    const store = new InMemoryThreadStore();
+    const appended: BaseEvent[][] = [];
+    const append = store.appendEvents.bind(store);
+    store.appendEvents = (threadId, agentId, events, ownerId) => {
+      appended.push(events);
+      return append(threadId, agentId, events, ownerId);
+    };
+    const runner = new KabooAgentRunner(store);
+    const events: BaseEvent[] = [
+      { type: EventType.RUN_STARTED, threadId: "t1", runId: "r1" } as BaseEvent,
+      { type: EventType.TEXT_MESSAGE_START, messageId: "m", role: "assistant" } as BaseEvent,
+      { type: EventType.TEXT_MESSAGE_CONTENT, messageId: "m", delta: "a" } as BaseEvent,
+      { type: EventType.TEXT_MESSAGE_CONTENT, messageId: "m", delta: "b" } as BaseEvent,
+      { type: EventType.TEXT_MESSAGE_END, messageId: "m" } as BaseEvent,
+      { type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1" } as BaseEvent,
+    ];
+
+    await collect(runner.run(runReq("t1", new FakeAgent(events), input())));
+
+    const deltas = appended.flat().filter((e) => e.type === EventType.TEXT_MESSAGE_CONTENT);
+    expect(deltas.map((e) => (e as BaseEvent & { delta?: string }).delta).join("")).toBe("ab");
+    expect(deltas.length).toBeLessThan(2);
+  });
+
+  it("tells the host when a run has ended, with how it ended", async () => {
+    const ends: unknown[] = [];
+    const runner = new KabooAgentRunner(new InMemoryThreadStore(), { onRunEnd: (end) => void ends.push(end) });
+    const events: BaseEvent[] = [
+      { type: EventType.RUN_STARTED, threadId: "t1", runId: "r1" } as BaseEvent,
+      { type: EventType.RUN_ERROR, message: "boom" } as BaseEvent,
+    ];
+
+    await collect(runner.run(runReq("t1", new FakeAgent(events), input())));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(ends).toEqual([{ threadId: "t1", runId: input().runId, outcome: "failed" }]);
+  });
+
+  it("drains: waits for runs in flight before a host shuts down", async () => {
+    const runner = new KabooAgentRunner(new InMemoryThreadStore());
+    expect(await runner.drain(10)).toBe(true);
+  });
+
+  it("keeps the messages of the most recent idle threads only, reading the others again when needed", async () => {
+    const store = new InMemoryThreadStore();
+    const runner = new KabooAgentRunner(store, { maxCachedThreads: 1 });
+    const turn = (threadId: string): BaseEvent[] => [
+      { type: EventType.RUN_STARTED, threadId, runId: `r-${threadId}` } as BaseEvent,
+      { type: EventType.RUN_FINISHED, threadId, runId: `r-${threadId}` } as BaseEvent,
+    ];
+    const reply = [{ id: "m1", role: "assistant", content: "hi" } as Message];
+
+    await collect(runner.run(runReq("t1", new FakeAgent(turn("t1"), reply), input())));
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await collect(runner.run(runReq("t2", new FakeAgent(turn("t2"), reply), input())));
+
+    expect(runner.getThreadMessages("t2")).toHaveLength(1);
+    expect(runner.getThreadMessages("t1")).toHaveLength(0);
+    expect(await store.readMessages("t1")).toHaveLength(1);
   });
 
   it("stores a recorded lab run compacted, and replays it as a stream AG-UI accepts with the same sub-agents", async () => {
